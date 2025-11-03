@@ -1,0 +1,19 @@
+{
+  "name": "commitflow",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asepindrak/commitflow.git"
+  },
+  "license": "MIT",
+  "author": "asepindrak"
+}
