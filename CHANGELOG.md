@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3
+
+### Patch Changes
+
+- 209177e: change package private to false
+
 ## 1.0.1
 
 ### Patch Changes
