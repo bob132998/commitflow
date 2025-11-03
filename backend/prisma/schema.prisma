@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model user {
+  id            String   @id @default(cuid())
+  email         String?
+  phone         String?
+  name          String?
+  session_token String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model aiToolCache {
+  id         String   @id @default(cuid())
+  toolName   String
+  parameters Json?
+  result     Json? // Use Json instead of String for JSON data
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("ai_tool_cache")
+}
+
+model dataCache {
+  id         String   @id @default(cuid())
+  dataName   String
+  parameters Json?
+  result     Json? // Use Json instead of String for JSON data
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("data_cache")
+}
+
+model chatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String   @db.Text
+  role      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("chat_message")
+}

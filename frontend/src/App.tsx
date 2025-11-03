@@ -1,0 +1,107 @@
+// src/App.tsx
+import Welcome from "./components/Welcome";
+import AiAgent from "./components/AiAgent";
+import ChatWindow from "./components/ChatWindow";
+import packageJson from "../package.json";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer } from 'react-toastify';
+
+function App() {
+  const [isShow, setIsShow] = useState(false);
+
+  // untuk kontrol animasi splash logo
+  const [showLogo, setShowLogo] = useState(true);
+
+
+  useEffect(() => {
+    new Audio("/sounds/send.mp3").load();
+    new Audio("/sounds/incoming.mp3").load();
+    new Audio("/sounds/close.mp3").load();
+    setTimeout(() => {
+      playSound("/sounds/send.mp3");
+    }, 1000)
+  }, []);
+
+  const onClose = () => {
+    setIsShow(false);
+  };
+
+  const playSound = (src: string) => {
+    const audio = new Audio(src);
+    audio.volume = 0.2;
+    audio.play().catch(() => { });
+  };
+
+
+  return (
+    <div className="flex flex-col justify-center items-center min-h-screen p-4 text-white relative overflow-hidden">
+      <AnimatePresence>
+        {showLogo && (
+          <motion.div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+            initial={{ scale: 0, opacity: 1 }}
+            animate={{ scale: [0, 1.5, 20], opacity: [1, 1, 0] }}
+            transition={{ duration: 2, ease: "easeInOut" }}
+            onAnimationComplete={() => setShowLogo(false)}
+          >
+            <img src="./logo.png" alt="Logo" className="w-32 h-32 sm:w-48 sm:h-48" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!showLogo && (
+        <motion.div
+          className="flex-1 flex flex-col items-center justify-center w-full"
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, y: -20 },
+              visible: { opacity: 1, y: 0, transition: { delay: 0.2 } },
+            }}
+          >
+            <Welcome />
+          </motion.div>
+
+
+          {!isShow && <AiAgent setIsShow={setIsShow} />}
+          {isShow && (
+            <ChatWindow
+              onClose={onClose}
+            />
+          )}
+        </motion.div>
+      )}
+
+      {/* Footer */}
+      {!showLogo && (
+        <motion.footer
+          className="mt-6 text-sm text-gray-400 flex justify-center gap-2 pb-20"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+        >
+          <span>v{packageJson.version}</span>
+          <span>• Developed by <strong>Asepindrak</strong></span>
+        </motion.footer>
+      )}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}       // durasi otomatis hilang (ms)
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"           // <- gunakan dark mode
+      />
+    </div>
+  );
+}
+
+export default App;

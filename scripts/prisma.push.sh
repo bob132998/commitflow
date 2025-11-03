@@ -1,0 +1,1 @@
+docker exec -it commitflow-api npx prisma db push
