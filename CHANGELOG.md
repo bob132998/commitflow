@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.2
+
+### Patch Changes
+
+- 6755e2e: chore: enhance Docker configuration by adding build arguments for VITE_API_URL and updating environment variables
+
 ## 1.2.1
 
 ### Patch Changes
