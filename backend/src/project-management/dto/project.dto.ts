@@ -8,6 +8,10 @@ export class CreateProjectDto {
 
   @IsOptional()
   @IsString()
+  clientId?: string | null;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 }
 

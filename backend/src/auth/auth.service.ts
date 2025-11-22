@@ -74,6 +74,13 @@ export class AuthService {
             name,
             password: hashed,
           },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            members: true,
+          },
         });
 
         // 3) create TeamMember
@@ -110,6 +117,7 @@ export class AuthService {
         token: jwt,
         user: result.user,
         teamMember: result.teamMember,
+        teamMemberId: result.teamMember.id,
         workspace: result.workspace,
         // optionally map clientTempId => memberId so FE can replace optimistic id
         clientTempId,
@@ -129,7 +137,14 @@ export class AuthService {
     // find user and include relation if exists
     const user = await this.prisma.user.findUnique({
       where: { email },
-      include: { members: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        members: true,
+        password: true,
+      },
     });
 
     if (!user) throw new UnauthorizedException("Invalid credentials");
@@ -138,8 +153,16 @@ export class AuthService {
     const ok = comparePassword(password || "", user.password);
     if (!ok) throw new UnauthorizedException("Invalid credentials");
 
+    // find user and include relation if exists
+    const teamMember: any = await this.prisma.teamMember.findFirst({
+      where: { email },
+    });
+
+    if (!teamMember) throw new UnauthorizedException("Invalid credentials");
+
     const jwt = this.jwtService.sign({
       userId: user?.id,
+      teamMemberId: teamMember.id,
     });
 
     await this.prisma.user.update({
@@ -147,7 +170,13 @@ export class AuthService {
       data: { session_token: jwt },
     });
 
-    return { token: jwt, user };
+    // Ensure password property is possibly undefined before delete, and avoid type error
+    if ("password" in user) {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+      delete (user as any).password;
+    }
+
+    return { token: jwt, user, teamMember, teamMemberId: teamMember.id };
   }
 
   async validateUser(token: string) {

@@ -154,24 +154,21 @@
   overflow-x: auto;
 }
 
-
 .background {
   background-color: #000;
-  background-image:
-    linear-gradient(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.7)),
-    url('/background.jpg');
+  background-image: linear-gradient(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.7)),
+    url("/background.jpg");
   /* note: ada leading / */
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
 
-@media screen and (max-width:768px) {
+@media screen and (max-width: 768px) {
   .text-vs {
     font-size: 0.65rem;
   }
 }
-
 
 /* Scrollbar global dark mode */
 ::-webkit-scrollbar {
@@ -206,7 +203,6 @@
   scrollbar-color: #4b5563 #1f2937;
   /* thumb track */
 }
-
 
 @keyframes fadeIn {
   from {

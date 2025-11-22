@@ -25,7 +25,7 @@ export class CreateTeamMemberDto {
   photo?: string;
 
   @IsString()
-  workspaceId?: string;
+  workspaceId: string;
 }
 
 export class UpdateTeamMemberDto {

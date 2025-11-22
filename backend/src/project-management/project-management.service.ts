@@ -10,11 +10,14 @@ import * as ExcelJS from "exceljs";
 import * as fs from "fs";
 import { Prisma } from "@prisma/client";
 import { hashPassword } from "src/auth/utils";
+import { EmailService } from "src/email/email.service";
+import logger from "vico-logger";
 
 const prisma = new PrismaClient();
 
 @Injectable()
 export class ProjectManagementService {
+  constructor(private email: EmailService) {}
   async getWorkspaces(userId) {
     const members = await prisma.teamMember.findMany({
       where: { isTrash: false, userId },
@@ -162,8 +165,78 @@ export class ProjectManagementService {
         name: payload.name ?? "Untitled",
         description: payload.description ?? null,
         clientId: payload.clientId ?? null,
+        workspaceId: payload.workspaceId ?? null,
       },
     });
+
+    //send email to team members
+    const teams = await prisma.teamMember.findMany({
+      where: { workspaceId: payload.workspaceId, isTrash: false },
+      select: { email: true },
+    });
+
+    const toEmails = teams.map((t) => t.email?.trim()).filter(Boolean);
+
+    if (toEmails.length === 0) throw new Error("No recipient emails found");
+
+    const projectName = p.name;
+    const projectDesc = p.description ?? "No description provided.";
+
+    const textMsg = `
+      A new project has been created on CommitFlow
+
+      Project Name:
+      ${projectName}
+
+      Description:
+      ${projectDesc}
+
+      You are receiving this notification because you are part of the workspace team.
+
+      Regards,
+      CommitFlow Team
+    `;
+
+    const htmlMsg = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="margin-bottom: 8px;">🚀 New Project Created</h2>
+        <p>A new project has been added to your workspace on <strong>CommitFlow</strong>.</p>
+
+        <div style="padding: 12px 16px; background: #f8f9fa; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 15px;">
+            <strong>Project Name:</strong><br>
+            ${projectName}
+          </p>
+
+          <p style="margin-top: 12px; font-size: 15px;">
+            <strong>Description:</strong><br>
+            ${projectDesc}
+          </p>
+        </div>
+
+        <p>You are receiving this because you are a member of this workspace.</p>
+
+        <p style="margin-top: 24px; font-size: 14px; color: #666;">
+          — CommitFlow Team
+        </p>
+      </div>
+    `;
+
+    for (const recipient of toEmails) {
+      try {
+        await this.email.sendMail({
+          to: recipient ?? "getechindonesia@gmail.com",
+          subject: "New Project Created | CommitFlow",
+          text: textMsg,
+          html: htmlMsg,
+        });
+      } catch (error) {
+        logger.error(error);
+      }
+
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     return p;
   }
 
@@ -316,6 +389,7 @@ export class ProjectManagementService {
       "clientId=",
       payload.clientId ?? null
     );
+
     // return serialized created task (timestamps as ISO)
     return {
       ...t,
@@ -335,7 +409,8 @@ export class ProjectManagementService {
       assigneeId?: string | null;
       startDate?: string | null;
       dueDate?: string | null;
-    }>
+    }>,
+    userId: string
   ) {
     const exists = await prisma.task.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException("Task not found");
@@ -350,7 +425,7 @@ export class ProjectManagementService {
       });
       if (!p) throw new NotFoundException("Project not found");
     }
-
+    let assignee: any = null;
     // validate assignee if present and not null
     if (
       typeof payload.assigneeId !== "undefined" &&
@@ -360,6 +435,7 @@ export class ProjectManagementService {
         where: { id: payload.assigneeId },
       });
       if (!m) throw new NotFoundException("Assignee not found");
+      assignee = m;
     }
 
     // build clean data object with allowed fields only
@@ -402,6 +478,110 @@ export class ProjectManagementService {
       },
     });
 
+    //send email to team members
+    const team = await prisma.teamMember.findFirst({
+      where: { userId, isTrash: false },
+    });
+
+    if (!team) throw new NotFoundException("Team not found");
+
+    const teams = await prisma.teamMember.findMany({
+      where: { workspaceId: team.workspaceId, isTrash: false },
+      select: { email: true },
+    });
+
+    // Ambil nama project (optional, tapi lebih keren)
+    const project = await prisma.project.findFirst({
+      where: { id: payload.projectId ?? "" },
+      select: { name: true },
+    });
+
+    if (!project) throw new NotFoundException("Project not found");
+
+    const projectName = project?.name ?? "No Project";
+
+    const toEmails = teams.map((t) => t.email?.trim()).filter(Boolean);
+
+    if (toEmails.length === 0) throw new Error("No recipient emails found");
+    // Format tanggal
+    const format = (d: any) =>
+      d ? new Date(d).toLocaleDateString("en-US") : "—";
+
+    const textMsg = `
+    A new task has been created on CommitFlow
+
+    Task Title:
+    ${updated.title}
+
+    Description:
+    ${updated.description ?? "No description"}
+
+    Status: ${updated.status}
+    Assignee: ${assignee.name ?? "none"}
+    Priority: ${updated.priority ?? "none"}
+    Start Date: ${format(updated.startDate)}
+    Due Date: ${format(updated.dueDate)}
+
+    Project:
+    ${projectName}
+
+    Regards,
+    CommitFlow Team
+    `;
+
+    const htmlMsg = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="margin-bottom: 8px;">📝 New Task Created</h2>
+      <p>A new task has been created on <strong>CommitFlow</strong>.</p>
+
+      <div style="padding: 14px 18px; background: #f8f9fa; border-radius: 10px; margin: 20px 0;">
+        <p style="margin: 0; font-size: 15px;">
+          <strong>Task Title:</strong><br>
+          ${updated.title}
+        </p>
+
+        <p style="margin-top: 12px; font-size: 15px;">
+          <strong>Description:</strong><br>
+          ${updated.description ?? "No description"}
+        </p>
+
+        <p style="margin-top: 12px; font-size: 15px;">
+          <strong>Status:</strong> ${updated.status}<br>
+          <strong>Assignee:</strong> ${assignee.name ?? "none"}<br>
+          <strong>Priority:</strong> ${updated.priority ?? "none"}
+        </p>
+
+        <p style="margin-top: 12px; font-size: 15px;">
+          <strong>Start Date:</strong> ${format(updated.startDate)}<br>
+          <strong>Due Date:</strong> ${format(updated.dueDate)}
+        </p>
+
+        <p style="margin-top: 12px; font-size: 15px;">
+          <strong>Project:</strong><br>
+          ${projectName}
+        </p>
+      </div>
+
+      <p>You received this because you are a member of the workspace team.</p>
+
+      <p style="margin-top: 24px; font-size: 14px; color: #666;">
+        — CommitFlow Team
+      </p>
+    </div>
+    `;
+
+    // KIRIM EMAIL
+    for (const recipient of toEmails) {
+      await this.email.sendMail({
+        to: recipient ?? "getechindonesia@gmail.com",
+        subject: "New Task Created | CommitFlow",
+        text: textMsg,
+        html: htmlMsg,
+      });
+
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     // serialize timestamps
     return {
       ...withComments,
@@ -426,10 +606,11 @@ export class ProjectManagementService {
       assigneeId?: string | null;
       startDate?: string | null;
       dueDate?: string | null;
-    }>
+    }>,
+    userId: string
   ) {
     // reuse updateTask logic (keeps validations & logging)
-    return this.updateTask(id, patch);
+    return this.updateTask(id, patch, userId);
   }
 
   async deleteTask(id: string) {
@@ -556,17 +737,28 @@ export class ProjectManagementService {
     // 2) Otherwise create both inside a transaction (atomic)
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // create user
-        const hashed = password ? hashPassword(password) : undefined;
-        const user = await tx.user.create({
-          data: {
-            name: name ?? "Unnamed",
-            email: email ?? null,
-            password: hashed ?? null,
-            phone: phone ?? null,
-          },
+        //check user
+        let user: any = null;
+        const existingUser = await prisma.user.findFirst({
+          where: { email },
         });
+        if (existingUser) {
+          user = existingUser;
+        }
 
+        if (!user) {
+          // create user
+          const hashed = password ? hashPassword(password) : undefined;
+          user = await tx.user.create({
+            data: {
+              name: name ?? "Unnamed",
+              email: email ?? null,
+              password: hashed ?? null,
+              phone: phone ?? null,
+            },
+          });
+        }
+        console.log(user);
         // create team member
         const tm = await tx.teamMember.create({
           data: {
@@ -760,7 +952,7 @@ export class ProjectManagementService {
 
     tasks.forEach((t) => {
       const assigneeName =
-        (t as any).assignee?.name ??
+        t.assignee?.name ??
         (t.assigneeId ? teamById.get(t.assigneeId)?.name : null) ??
         null;
 
@@ -772,7 +964,7 @@ export class ProjectManagementService {
         status: t.status,
         assigneeId: t.assigneeId ?? null,
         assigneeName,
-        priority: (t as any).priority ?? null,
+        priority: t.priority ?? null,
         startDate: t.startDate ?? null,
         dueDate: t.dueDate ?? null,
         createdAt: t.createdAt?.toISOString(),

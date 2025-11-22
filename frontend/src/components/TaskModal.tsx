@@ -11,6 +11,7 @@ import { PrioritySelect } from "./PrioritySelect";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { handleWhatsapp, handleWhatsappTask } from "../utils/sendWhatsapp";
 import WhatsappIcon from "./WhatsappIcon";
+import { useAuthStore } from "../utils/store";
 
 export default function TaskModal({
   projects,
@@ -46,12 +47,9 @@ export default function TaskModal({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentAssignee = team.find((t) => t.id === task.assigneeId);
   const assigneePhone = currentAssignee?.phone || "";
+  const user = useAuthStore((s) => s.user);
   // quick lookup for current member name (fallback when tasks only store assigneeName)
-  const currentMember = useMemo(
-    () => team.find((m) => String(m.id) === String(currentMemberId)),
-    [team, currentMemberId]
-  );
-  const currentMemberName = currentMember?.name ?? null;
+  const currentMemberName = user?.name ?? null;
 
   const currentProject = useMemo(
     () => projects.find((m) => String(m.id) === String(activeProjectId)),

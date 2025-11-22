@@ -90,7 +90,6 @@ export function useUpdateTask() {
         } catch (_) {
           console.warn("enqueue update_task failed");
         }
-        toast.dark("Update queued (backend failed)");
         if (ctx?.prev) qc.setQueryData(["tasks"], ctx.prev);
       },
       onSettled: () => qc.invalidateQueries(["tasks"]),
@@ -123,7 +122,6 @@ export function useDeleteTask() {
       } catch (_) {
         console.warn("enqueue delete_task failed");
       }
-      toast.dark("Delete queued (backend failed)");
       if (ctx?.prev) qc.setQueryData(["tasks"], ctx.prev);
     },
     onSettled: () => qc.invalidateQueries(["tasks"]),

@@ -34,7 +34,6 @@ export default function TeamDetailModal({
     }).then((res) => {
       if (res.isConfirmed) {
         onDelete(member.id);
-        toast.dark(`${member.name} removed`);
         onClose();
       }
     });

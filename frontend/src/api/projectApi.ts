@@ -209,8 +209,10 @@ export async function updateComment(
 /**
  * Team members
  */
-export async function getTeam() {
-  const res = await apiFetch(`${BASE}/api/team`, { method: "GET" });
+export async function getTeam(workspaceId: string) {
+  const res = await apiFetch(`${BASE}/api/team/${workspaceId}`, {
+    method: "GET",
+  });
   const parsed = await parseJson(res);
   if (!res.ok) throw makeError(res, parsed);
   return parsed;

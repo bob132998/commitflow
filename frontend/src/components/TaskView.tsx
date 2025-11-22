@@ -16,17 +16,19 @@ export default function TaskView({
   dragTaskId,
   onSelectTask,
   team,
+  startPointerDrag,
 }: {
   currentMemberId: any;
   columns: { key: Task["status"]; title: string; items: Task[] }[];
-  onDropTo: (s: Task["status"]) => void;
-  onDragStart: (e: any, id: string) => void;
-  onDrag: (e: any) => void;
-  onDragEnd: (e: any) => void;
-  dragPos: any;
-  dragTaskId: any;
+  onDropTo: (s: Task["status"], draggedId?: string) => void;
+  onDragStart: (e: React.DragEvent, id: string) => void;
+  onDrag: (e: React.DragEvent) => void;
+  onDragEnd: (e: React.DragEvent) => void;
+  dragPos: { x: number; y: number; width: number };
+  dragTaskId: string | null;
   onSelectTask: (t: Task) => void;
   team: TeamMember[];
+  startPointerDrag: (id: string, x: number, y: number, target: any) => void;
 }) {
   const STORAGE_KEY = "taskview_mode_v1";
   const [view, setView] = useState<"kanban" | "list" | "timeline">(() => {
@@ -110,6 +112,7 @@ export default function TaskView({
           onSelectTask={onSelectTask}
           team={team}
           dragPos={dragPos}
+          startPointerDrag={startPointerDrag}
         />
       )}
 

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Sidebar from "./Sidebar";
 import TaskModal from "./TaskModal";
 import type { Project, Task, TeamMember, Workspace } from "../types";
-import { Sun, Moon, PlusCircle } from "lucide-react";
+import { Sun, Moon, PlusCircle, VolumeX, Volume2 } from "lucide-react";
 import TaskView from "./TaskView";
 import ExportImportControls from "./ExportImportControls";
 import { toast } from "react-toastify";
@@ -23,6 +23,7 @@ import {
 import { useAuthStore } from "../utils/store";
 import EditProfileModal from "./EditProfileModal";
 import { playSound } from "../utils/playSound";
+import { getState, saveState } from "../utils/local";
 
 // Create local QueryClient so this component works even if app not wrapped globally
 const queryClient = new QueryClient();
@@ -32,26 +33,63 @@ const nid = (x: any) =>
   typeof x === "undefined" || x === null ? "" : String(x);
 
 export default function ProjectManagement() {
-  // const seeded = seedIfEmpty();
+  const initialWorkspaceId = getState("workspaceId");
+  const initialProjectId = getState("projectId");
 
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isPlaySound, setIsPlaySound] = useState(true);
   const initialTeam: TeamMember[] = normalizeTeamInput([]);
   const [team, setTeam] = useState<TeamMember[]>(() => initialTeam);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
-  const authTeamMemberId = useAuthStore((s) => s.teamMemberId);
   const teamMemberId = useAuthStore((s) => s.teamMemberId);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string>(
+    initialProjectId ? initialProjectId : projects[0]?.id ?? ""
+  );
+
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(
+    initialWorkspaceId ? initialWorkspaceId : workspaces[0]?.id ?? ""
+  );
+  const [lastActiveWorkspaceId, setLastActiveWorkspaceId] = useState<string>(
+    initialWorkspaceId ? initialWorkspaceId : workspaces[0]?.id ?? ""
+  );
+
+  const rafRef = useRef<number | null>(null);
+  const pendingPosRef = useRef<{ x: number; y: number; width: number } | null>(
+    null
+  );
+  console.log(team);
   const currentMember = team.find((t) => t.id === teamMemberId);
-  const userPhoto = currentMember?.photo || null;
 
   const token = useAuthStore((s) => s.token);
   const userId = useAuthStore((s) => s.userId);
+  const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-
+  console.log(user);
+  console.log(currentMember?.name);
+  const userWorkspace = user?.members.filter(
+    (item: any) => item.workspaceId === activeWorkspaceId
+  );
+  console.log("userWorkspace", userWorkspace);
   // ambil huruf pertama sebagai icon
-  const userInitial = (userId?.[0] || "U").toUpperCase();
+  const userInitial = (
+    (userWorkspace &&
+      userWorkspace.length > 0 &&
+      userWorkspace[0]?.name?.slice(0, 1)) ||
+    "U"
+  ).toUpperCase();
+  const userPhoto =
+    (userWorkspace && userWorkspace.length > 0 && userWorkspace[0]?.photo) ||
+    null;
+  // alert(userInitial);
+  console.log(userInitial);
 
-  // if we have an auth teamMemberId but no team loaded yet, fetch team so we can resolve assignee
+  const authTeamMemberId =
+    (userWorkspace && userWorkspace.length > 0 && userWorkspace[0]?.id) || null;
   useEffect(() => {
     if (!authTeamMemberId) return;
     if (team && team.length > 0) return;
@@ -59,7 +97,8 @@ export default function ProjectManagement() {
     let mounted = true;
     (async () => {
       try {
-        const serverTeam = await api.getTeam();
+        // prefer passing workspace id to server if available
+        const serverTeam = await api.getTeam(activeWorkspaceId);
         if (!mounted) return;
         const normalized = normalizeTeamInput(serverTeam || []);
         setTeam(normalized);
@@ -72,45 +111,53 @@ export default function ProjectManagement() {
     return () => {
       mounted = false;
     };
-  }, [authTeamMemberId, team.length]);
+  }, [authTeamMemberId, team.length, activeWorkspaceId]);
+
+  useEffect(() => {
+    setTimeout(() => {
+      setIsLoaded(true);
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded) {
+      playSound("/sounds/close.mp3", isPlaySound);
+    }
+    saveState("workspaceId", activeWorkspaceId);
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    if (activeWorkspaceId === lastActiveWorkspaceId && isLoaded) {
+      playSound("/sounds/close.mp3", isPlaySound);
+    } else {
+      setLastActiveWorkspaceId(activeWorkspaceId);
+    }
+    saveState("projectId", activeProjectId);
+  }, [activeProjectId]);
+
+  const onOffSound = () => {
+    setIsPlaySound(!isPlaySound);
+    playSound("/sounds/close.mp3", isPlaySound);
+  };
+
+  // move team-dependent logic after activeWorkspaceId is defined
 
   const openEditProfile = async () => {
     setShowProfileMenu(false);
-
-    // prefer local team lookup
-    let member = authTeamMemberId
-      ? team.find((t) => t.id === authTeamMemberId)
-      : undefined;
-
-    if (!member) {
-      // If not found locally, try fetching server team and normalize
-      try {
-        const serverTeam = await api.getTeam();
-        const normalized = normalizeTeamInput(serverTeam || []);
-        setTeam(normalized);
-        member = authTeamMemberId
-          ? normalized.find((t) => t.id === authTeamMemberId)
-          : undefined;
-      } catch (err) {
-        // ignore — still allow creating blank profile if none found
-      }
+    if (userWorkspace && userWorkspace.length > 0) {
+      setEditMember(userWorkspace[0] ?? null);
     }
-
-    setEditMember(member ?? null);
     setShowEditProfile(true);
   };
 
   const handleSaveProfile = async (updated: TeamMember) => {
-    // optimistic update locally
     setTeam((prev) => {
       const map = new Map(prev.map((p) => [p.id, p]));
       map.set(updated.id, updated);
       return Array.from(map.values());
     });
 
-    // try save to backend
     try {
-      // updateTeamMember expects id + payload
       const payload = {
         name: updated.name,
         email: updated.email ?? null,
@@ -120,17 +167,14 @@ export default function ProjectManagement() {
         password: updated.password ?? null,
       };
       const saved = await api.updateTeamMember(updated.id, payload);
-      // ensure local state reflects server canonical response
       setTeam((prev) => prev.map((t) => (t.id === saved.id ? saved : t)));
     } catch (err) {
-      // fallback: queue op
       try {
         enqueueOp({
           op: "update_team",
           payload: { id: updated.id, patch: updated },
           createdAt: new Date().toISOString(),
         });
-        toast.dark("Offline: profile update queued");
       } catch (_) {
         toast.dark("Failed to queue profile update");
       }
@@ -145,7 +189,6 @@ export default function ProjectManagement() {
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
-      // kalau klik bukan pada profile button/dropdown
       if (!(e.target as HTMLElement).closest(".profile-menu-area")) {
         setShowProfileMenu(false);
       }
@@ -154,73 +197,208 @@ export default function ProjectManagement() {
     return () => document.removeEventListener("click", close);
   }, []);
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string>(
-    projects[0]?.id ?? ""
-  );
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(
-    workspaces[0]?.id ?? ""
-  );
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
-  const [dragPos, setDragPos] = useState({ x: 0, y: 0, width: 300 });
-  const offsetRef = useRef({ x: 0, y: 0, width: 300 });
+  const [dragPos, setDragPos] = useState<{
+    x: number;
+    y: number;
+    width: number;
+  }>({ x: 0, y: 0, width: 300 });
+  const offsetRef = useRef<{ x: number; y: number; width: number }>({
+    x: 0,
+    y: 0,
+    width: 300,
+  });
+
+  useEffect(() => {
+    if (isLoaded) {
+      playSound("/sounds/close.mp3", isPlaySound);
+    }
+  }, [selectedTask]);
+
+  // panggil ini instead of onDragStart untuk pointer devices
+  function startPointerDrag(
+    id: string,
+    clientX: number,
+    clientY: number,
+    el: HTMLElement | null,
+    opts: { captureImmediately?: boolean } = {}
+  ) {
+    // set dragging id asap
+    setDragTaskId(id);
+
+    // compute rect (viewport coords)
+    const rect = el?.getBoundingClientRect();
+    const width = rect?.width ?? 300;
+
+    // IMPORTANT: offsetRef uses client coords (viewport)
+    offsetRef.current = {
+      x: rect ? clientX - rect.left : 12,
+      y: rect ? clientY - rect.top : 12,
+      width,
+    };
+
+    // If we want preview to appear exactly on top of original card,
+    // set dragPos to the card's top-left (viewport)
+    const initial = {
+      x: rect ? rect.left : clientX - offsetRef.current.x,
+      y: rect ? rect.top : clientY - offsetRef.current.y,
+      width,
+    };
+    setDragPos(initial);
+
+    // Now attach pointermove/pointerup to track movement (RAF-batched)
+    let localRaf: number | null = null;
+
+    const onMove = (ev: PointerEvent) => {
+      pendingPosRef.current = {
+        x: ev.clientX - offsetRef.current.x,
+        y: ev.clientY - offsetRef.current.y,
+        width: offsetRef.current.width,
+      };
+      if (localRaf == null) {
+        localRaf = window.requestAnimationFrame(() => {
+          if (pendingPosRef.current) {
+            setDragPos(pendingPosRef.current);
+            pendingPosRef.current = null;
+          }
+          localRaf = null;
+        });
+      }
+    };
+
+    const onUp = (ev: PointerEvent) => {
+      if (localRaf != null) {
+        window.cancelAnimationFrame(localRaf);
+        localRaf = null;
+      }
+
+      // perform hit-test/drop
+      const els = document.elementsFromPoint(ev.clientX, ev.clientY);
+      const dropEl = els.find((el) =>
+        (el as HTMLElement).closest("[data-drop-key]")
+      );
+      const dropKeyEl = dropEl
+        ? ((dropEl as HTMLElement).closest("[data-drop-key]") as HTMLElement)
+        : null;
+      const dropKey = dropKeyEl
+        ? (dropKeyEl.dataset.dropKey as any)
+        : undefined;
+
+      if (dropKey) {
+        // use the same update logic as onDropTo
+        const idToUse = id;
+        setTasks((s) =>
+          s.map((t) =>
+            nid(t.id) === nid(idToUse) ? { ...t, status: dropKey } : t
+          )
+        );
+        updateTaskMutation.mutate(
+          { id: idToUse, patch: { status: dropKey } },
+          {
+            onError: () => {
+              try {
+                enqueueOp({
+                  op: "update_task",
+                  payload: { id: idToUse, patch: { status: dropKey } },
+                  createdAt: new Date().toISOString(),
+                });
+              } catch (e) {
+                console.log(e);
+              }
+            },
+            onSettled: () =>
+              qcRef.current.invalidateQueries(["tasks", activeProjectId]),
+          }
+        );
+      }
+
+      // cleanup
+      setDragTaskId(null);
+      setDragPos({ x: 0, y: 0, width: 300 });
+      offsetRef.current = { x: 0, y: 0, width: 300 };
+
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    // attach listeners AFTER setting initial pos so preview immediately visible
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
 
   // dipassing ke KanbanBoard via TaskView
   function handleDragStart(e: React.DragEvent, id: string) {
+    console.log("handleDragStart", id);
     setDragTaskId(id);
 
-    // sembunyikan ghost image
     try {
       e.dataTransfer?.setDragImage(new Image(), 0, 0);
-    } catch (e: any) {
-      console.log(e);
+      e.dataTransfer?.setData("text/plain", id);
+      e.dataTransfer!.effectAllowed = "move";
+    } catch (err) {
+      console.log(err);
     }
 
-    // currentTarget seharusnya adalah elemen .task-card yang memicu event
     const el = e.currentTarget as HTMLElement;
     if (!el) return;
     const rect = el.getBoundingClientRect();
 
-    // simpan offset kursor relatif ke elemen
+    // IMPORTANT: use client coords (viewport). DO NOT add window.scrollX/Y here.
     offsetRef.current = {
-      x: e.clientX - rect.left,
+      x: e.clientX - rect.left, // clientX - rect.left (both viewport-based)
       y: e.clientY - rect.top,
       width: rect.width,
     };
 
-    // set initial pos supaya langsung terlihat berpindah
+    // store dragPos as viewport-based target (client coords minus offset)
     setDragPos({
-      x: e.clientX - offsetRef.current.x,
-      y: e.clientY - offsetRef.current.y,
+      x: e.clientX - offsetRef.current.x, // equals rect.left
+      y: e.clientY - offsetRef.current.y, // equals rect.top
       width: rect.width,
     });
   }
 
+  // ensure rafRef and pendingPosRef are declared at top-level of component
+  // const rafRef = useRef<number | null>(null);
+  // const pendingPosRef = useRef<{ x:number;y:number;width:number } | null>(null);
+
   function handleDrag(e: React.DragEvent) {
-    // some browsers emit clientX/Y = 0 when leaving window — ignore those
     if (!dragTaskId) return;
     if (e.clientX === 0 && e.clientY === 0) return;
 
-    setDragPos({
+    // compute viewport-based target coords
+    const next = {
       x: e.clientX - offsetRef.current.x,
       y: e.clientY - offsetRef.current.y,
       width: offsetRef.current.width,
-    });
+    };
+
+    pendingPosRef.current = next;
+
+    if (rafRef.current == null) {
+      rafRef.current = window.requestAnimationFrame(() => {
+        const p = pendingPosRef.current;
+        if (p) setDragPos(p);
+        pendingPosRef.current = null;
+        rafRef.current = null;
+      });
+    }
   }
 
   function handleDragEnd(_e: React.DragEvent) {
-    // apply drop is handled by onDrop on columns (you already have onDropTo)
+    if (rafRef.current != null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      pendingPosRef.current = null;
+    }
     setDragTaskId(null);
     offsetRef.current = { x: 0, y: 0, width: 300 };
-    playSound("/sounds/send.mp3", true);
+    setDragPos({ x: 0, y: 0, width: 300 });
   }
 
   const [dark, setDark] = useState<boolean>(() => {
     try {
-      // prefer stored user preference, otherwise use system preference
       const stored = localStorage.getItem("commitflow_theme");
       if (stored) return stored === "dark";
       return (
@@ -232,18 +410,13 @@ export default function ProjectManagement() {
     }
   });
 
-  // prevent double-create clicks
   const [creatingTask, setCreatingTask] = useState(false);
-
-  // React Query client for hooks that need it
   const qcRef = useRef(queryClient);
 
-  // If you already export hooks, use them. If not, the hooks use qcRef internally.
-  // We'll call our custom hooks which you said you've created.
   const tasksQuery = useTasksQuery(
     activeProjectId ?? "",
     activeWorkspaceId ?? ""
-  ); // returns { data, isLoading, ... }
+  );
   const createTaskMutation = useCreateTask();
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
@@ -262,7 +435,6 @@ export default function ProjectManagement() {
     })();
   }, []);
 
-  // Persist local copy for offline fallback while migrating:
   useEffect(() => {
     try {
       const snapshot = { workspaces, projects, tasks, ui: { dark }, team };
@@ -275,8 +447,6 @@ export default function ProjectManagement() {
     }
   }, [workspaces, projects, tasks, dark, team]);
 
-  // On mount: load server state (projects, team) so UI reflects persisted data
-  // ubah menjadi hanya tergantung workspace
   useEffect(() => {
     (async () => {
       try {
@@ -286,9 +456,9 @@ export default function ProjectManagement() {
 
         if (Array.isArray(state.projects) && state.projects.length > 0) {
           setProjects(state.projects);
-          // set active project only if none selected or current not in list
           setActiveProjectId((prev) => {
-            if (prev && state.projects.some((p) => p.id === prev)) return prev;
+            if (prev && state.projects.some((p: any) => p.id === prev))
+              return prev;
             return state.projects[0].id ?? "";
           });
         } else {
@@ -306,16 +476,12 @@ export default function ProjectManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId]);
 
-  // On mount: setup realtime socket + periodic queue flush
   useEffect(() => {
-    // create socket with getters so realtime util can target specific query keys
     const wsHandle = createRealtimeSocket(
       qcRef.current,
       () => activeProjectId,
       () => activeWorkspaceId
     );
-
-    let intervalId: number | undefined;
 
     const attemptFlush = async () => {
       try {
@@ -388,12 +554,10 @@ export default function ProjectManagement() {
               const cur = getQueue();
               cur.shift();
               localStorage.setItem("cf_op_queue_v1", JSON.stringify(cur));
-            } // --- replace the create_project branch inside attemptFlush with this ---
-            else if (op.op === "create_project") {
+            } else if (op.op === "create_project") {
               const originalTmpId = op.payload?.id ?? op.payload?.clientId;
               const payload = { ...op.payload } as any;
 
-              // keep clientId logic (do not remove workspaceId!)
               if (
                 payload &&
                 typeof payload.id === "string" &&
@@ -403,12 +567,8 @@ export default function ProjectManagement() {
                 delete payload.id;
               }
 
-              // Ensure we have a workspaceId to send to backend.
-              // Prefer payload.workspaceId (if queued correctly), otherwise fall back to current activeWorkspaceId from closure.
               const workspaceIdToUse = payload.workspaceId ?? activeWorkspaceId;
               if (!workspaceIdToUse || typeof workspaceIdToUse !== "string") {
-                // Defensive: do not attempt to send request that will fail.
-                // Stop processing queue now; will retry later when workspaceId becomes available.
                 console.warn(
                   "flushQueue: create_project missing workspaceId — will retry later",
                   op
@@ -416,17 +576,14 @@ export default function ProjectManagement() {
                 return;
               }
 
-              // attach the workspaceId to the payload before sending
               payload.workspaceId = workspaceIdToUse;
 
               const created = await api.createProject(payload);
 
-              // remove processed op
               const cur = getQueue();
               cur.shift();
               localStorage.setItem("cf_op_queue_v1", JSON.stringify(cur));
 
-              // remap any remaining queued ops that reference the tmp project id to the new project id
               if (originalTmpId && typeof created?.id === "string") {
                 const remaining = getQueue();
                 let changed = false;
@@ -526,14 +683,12 @@ export default function ProjectManagement() {
               localStorage.setItem("cf_op_queue_v1", JSON.stringify(cur));
             }
           } catch (err) {
-            // stop on first failure to avoid busy-loop; will retry later
             console.warn("flushQueue op failed", err, op);
             return;
           }
           processed++;
         }
 
-        // Use latest active ids (from closures), only invalidate targeted keys when id truthy
         if (activeProjectId) {
           qcRef.current.invalidateQueries(["tasks", activeProjectId]);
         } else {
@@ -552,26 +707,25 @@ export default function ProjectManagement() {
       }
     };
 
-    // start polling flush
-    intervalId = window.setInterval(attemptFlush, 7000);
+    const intervalId: number | undefined = window.setInterval(
+      attemptFlush,
+      7000
+    );
     window.addEventListener("online", attemptFlush);
 
-    // also try immediately
     attemptFlush().catch(() => {});
 
     return () => {
-      // cleanup socket + interval + listener
       try {
         wsHandle?.close();
-      } catch (_) {}
+      } catch (e) {
+        console.log(e);
+      }
       if (intervalId) clearInterval(intervalId);
       window.removeEventListener("online", attemptFlush);
     };
-    // re-run effect when active ids change so closure + socket use latest values
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId, activeWorkspaceId]);
 
-  // Apply dark class to document root and persist preference
   useEffect(() => {
     try {
       const root = document.documentElement;
@@ -579,17 +733,15 @@ export default function ProjectManagement() {
       else root.classList.remove("dark");
       localStorage.setItem("commitflow_theme", dark ? "dark" : "light");
     } catch (e) {
-      // ignore (best-effort)
+      // ignore
     }
   }, [dark]);
 
-  // Keep local UI state in sync with server query results when available
   useEffect(() => {
     if (tasksQuery.data && Array.isArray(tasksQuery.data)) {
       setTasks((localTasks) => {
         const serverTasks = tasksQuery.data as Task[];
         const tmp = localTasks.filter((t) => nid(t.id).startsWith("tmp_"));
-        // Keep tmp items that belong to this project only (or keep all tmp but remap later)
         const others = localTasks.filter(
           (t) =>
             !nid(t.id).startsWith("tmp_") && t.projectId !== activeProjectId
@@ -606,16 +758,14 @@ export default function ProjectManagement() {
     }
   }, [tasksQuery.data, activeProjectId]);
 
-  // UI handlers using mutations (optimistic)
   async function handleAddTask(title: string) {
     if (!activeProjectId) {
       toast.dark("Select a project first");
       return;
     }
-    // prevent double-clicks creating multiple optimistic items
     if (creatingTask) return;
     setCreatingTask(true);
-    playSound("/sounds/incoming.mp3", true);
+    playSound("/sounds/incoming.mp3", isPlaySound);
     const optimistic: Task = {
       id: `tmp_${Math.random().toString(36).slice(2, 9)}`,
       title,
@@ -633,14 +783,12 @@ export default function ProjectManagement() {
     setSelectedTask(optimistic);
 
     try {
-      // do not send optimistic/temp id to server — let backend create canonical id
       const { id: _tmp, ...payload } = { ...optimistic, title } as any;
       const created = await createTaskMutation.mutateAsync({
         ...payload,
         clientId: optimistic.id,
       });
 
-      // replace tmp with created and dedupe by normalized id
       setTasks((s) => {
         const replaced = s.map((t) =>
           nid(t.id) === nid(optimistic.id) ? created : t
@@ -650,14 +798,11 @@ export default function ProjectManagement() {
         return Array.from(map.values());
       });
 
-      // if the optimistic item is currently selected, replace selection with server-created task
       setSelectedTask((cur) =>
         cur && nid(cur.id) === nid(optimistic.id) ? created : cur
       );
 
-      // ensure queries updated
       qcRef.current.invalidateQueries(["tasks", activeProjectId]);
-      toast.dark("Task created");
     } catch (err) {
       console.error(
         "[handleAddTask] create failed:",
@@ -665,32 +810,27 @@ export default function ProjectManagement() {
         "optimistic:",
         optimistic
       );
-      // enqueue if mutation failed (offline)
       try {
         enqueueOp({
           op: "create_task",
           payload: { ...optimistic, clientId: optimistic.id },
           createdAt: new Date().toISOString(),
         });
-      } catch (_) {
-        /* best-effort */
+      } catch (e) {
+        console.log(e);
       }
-      toast.dark("Offline: task queued to sync");
     } finally {
       setCreatingTask(false);
     }
   }
 
   async function handleUpdateTask(updated: Task) {
-    // immediate local replace (normalize id compare)
     setTasks((s) =>
       s.map((t) => (nid(t.id) === nid(updated.id) ? updated : t))
     );
 
-    // If this task still has a temporary id, queue the update instead of sending to backend
     if (nid(updated.id).startsWith("tmp_")) {
       try {
-        // queue patch with only allowed fields + client-side id
         const patchToQueue = {
           id: updated.id,
           patch: {
@@ -722,12 +862,10 @@ export default function ProjectManagement() {
       } catch (_) {
         console.log("handle update task enqueue failed");
       }
-      toast.dark("Update queued (offline)");
       return;
     }
 
     try {
-      // Build clean patch containing only allowed fields
       const patch: any = {};
       patch.title = updated.title;
       patch.description = (updated as any).description ?? undefined;
@@ -736,7 +874,6 @@ export default function ProjectManagement() {
       patch.priority = (updated as any).priority ?? undefined;
       patch.assigneeId = updated.assigneeId ?? undefined;
 
-      // Ensure dates are strings (ISO) or null/undefined
       if (typeof (updated as any).startDate !== "undefined") {
         patch.startDate =
           (updated as any).startDate === null
@@ -756,7 +893,6 @@ export default function ProjectManagement() {
       }
 
       await updateTaskMutation.mutateAsync({ id: updated.id, patch });
-      toast.dark("Task updated");
     } catch (err) {
       try {
         enqueueOp({
@@ -767,33 +903,22 @@ export default function ProjectManagement() {
       } catch (_) {
         console.log("handle update task failed");
       }
-      toast.dark("Update queued (offline)");
     }
   }
 
   async function handleDeleteTask(id: string) {
-    // simpan snapshot untuk rollback
     const prev = tasks;
-    // remove locally immediately (optimistic)
     setTasks((s) => s.filter((t) => nid(t.id) !== nid(id)));
 
     try {
-      // attempt remote delete via mutation
       await deleteTaskMutation.mutateAsync(id);
-
-      // invalidate queries so server state refreshes
       try {
         qcRef.current.invalidateQueries(["tasks", activeProjectId]);
       } catch (e) {
-        /* best-effort */
+        console.log(e);
       }
-
-      toast.dark("Task deleted");
     } catch (err) {
-      // restore local list on failure
       setTasks(prev);
-
-      // if offline or remote failed, queue op for later sync
       try {
         enqueueOp({
           op: "delete_task",
@@ -803,37 +928,49 @@ export default function ProjectManagement() {
       } catch (_) {
         console.log("handle delete task failed");
       }
-      toast.dark("Delete queued (offline)");
     } finally {
-      // ensure modal/selection closed if the deleted task was selected
       setSelectedTask((cur) => (cur && nid(cur.id) === nid(id) ? null : cur));
     }
   }
 
-  // Team operations (local optimistic + API call, fallback to queue)
   async function addTeamMember(newMember: TeamMember) {
     const m = {
       ...newMember,
       id: newMember.id || `tmp_${Math.random().toString(36).slice(2, 9)}`,
+      workspaceId: activeWorkspaceId,
     };
+
+    // optimistic add so UI updates immediately
     setTeam((s) => [...s, m]);
+
     try {
       const created = await api.createTeamMember({ ...m, clientId: m.id });
-      // replace tmp id with server id if returned
-      setTeam((prev) => prev.map((t) => (t.id === m.id ? created : t)));
-      toast.dark(`${created.name} added`);
-      playSound("/sounds/send.mp3", true);
+      console.log("createTeamMember returned:", created);
+
+      // Merge created response with optimistic item so we don't lose fields
+      const merged = { ...m, ...created };
+      setTeam((prev) => prev.map((t) => (t.id === m.id ? merged : t)));
+
+      // ensure canonical server state: re-fetch team for current workspace
+      try {
+        const serverTeam = await api.getTeam(activeWorkspaceId);
+        setTeam(normalizeTeamInput(serverTeam || []));
+      } catch (err) {
+        // if fetch fails, at least keep optimistic merged state
+        console.warn("Failed to refresh team after create", err);
+      }
     } catch (err) {
+      console.error("createTeamMember failed, enqueueing", err);
       try {
         enqueueOp({
           op: "create_team",
           payload: { ...m, clientId: m.id },
           createdAt: new Date().toISOString(),
         });
+        // leave optimistic item in list — it will be reconciled by queue flush later
       } catch (_) {
         console.log("add team failed");
       }
-      toast.dark(`${m.name} queued to sync`);
     }
   }
 
@@ -869,7 +1006,6 @@ export default function ProjectManagement() {
 
       try {
         await api.deleteTeamMember(target.id);
-        toast.dark("Member deleted");
       } catch (err) {
         try {
           enqueueOp({
@@ -880,7 +1016,6 @@ export default function ProjectManagement() {
         } catch (_) {
           console.log("remove team failed");
         }
-        toast.dark("Member deletion queued (offline)");
       }
     });
   }
@@ -889,43 +1024,473 @@ export default function ProjectManagement() {
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 
-  function handleImport(payload: {
+  async function handleImport(payload: {
     projects?: Project[];
     tasks?: Task[];
-    team?: string[];
+    team?: string[] | any[];
   }) {
-    if (payload.projects && payload.projects.length > 0) {
-      setProjects((prev) => {
-        const map = new Map(prev.map((p) => [p.id, p]));
-        payload.projects!.forEach((p) => {
-          if (!map.has(p.id)) map.set(p.id, p);
-        });
-        return Array.from(map.values());
-      });
+    // helper
+    const genTmpId = () => `tmp_${Math.random().toString(36).slice(2, 9)}`;
+
+    // Normalize incoming team
+    const incomingTeam: TeamMember[] = (payload.team || []).map((r: any) => {
+      if (typeof r === "string") {
+        return {
+          id: "",
+          clientId: undefined,
+          userId: "",
+          workspaceId: activeWorkspaceId || "",
+          name: r,
+          role: null,
+          email: null,
+          photo: null,
+          phone: null,
+          isTrash: false,
+          createdAt: undefined,
+          updatedAt: undefined,
+        } as any;
+      }
+      return {
+        id: r.id ?? r.ID ?? r.Id ?? "",
+        clientId: r.clientId ?? r.clientid ?? undefined,
+        userId: r.userId ?? r.userid ?? r.user ?? "",
+        workspaceId:
+          (activeWorkspaceId || r.workspaceId) ??
+          r.workspaceid ??
+          r.workspace ??
+          "",
+        name: r.name ?? r.Name ?? r.username ?? "",
+        role: r.role ?? r.Role ?? null,
+        email: r.email ?? r.Email ?? null,
+        photo: r.photo ?? r.Photo ?? null,
+        phone: r.phone ?? r.Phone ?? null,
+        isTrash: typeof r.isTrash !== "undefined" ? Boolean(r.isTrash) : false,
+        createdAt: r.createdAt ?? r.CreatedAt ?? undefined,
+        updatedAt: r.updatedAt ?? r.UpdatedAt ?? undefined,
+      } as TeamMember;
+    });
+
+    // Merge helper (prefer incoming fields, preserve prev ids if possible)
+    const mergeTeam = (prev: TeamMember[], incoming: TeamMember[]) => {
+      const byId = new Map(prev.filter((p) => !!p.id).map((p) => [p.id, p]));
+      const byNameLower = new Map(prev.map((p) => [p.name.toLowerCase(), p]));
+      for (const n of incoming) {
+        if (!n.id) n.id = genTmpId();
+        n.workspaceId = activeWorkspaceId; // force to active workspace
+        const nameLower = (n.name ?? "").toLowerCase();
+        if (n.id && byId.has(n.id)) {
+          const ex = byId.get(n.id)!;
+          byId.set(n.id, { ...ex, ...n });
+        } else if (n.name && byNameLower.has(nameLower)) {
+          const ex = byNameLower.get(nameLower)!;
+          const idToUse = ex.id || n.id || genTmpId();
+          const merged = { ...ex, ...n, id: idToUse };
+          byId.set(idToUse, merged);
+        } else {
+          if (n.id) byId.set(n.id, n);
+          else if (n.name) byNameLower.set(nameLower, n);
+        }
+      }
+      const result: TeamMember[] = [];
+      for (const v of byId.values()) result.push(v);
+      for (const v of byNameLower.values()) {
+        if (!result.some((r) => r.name.toLowerCase() === v.name.toLowerCase()))
+          result.push(v);
+      }
+      return result;
+    };
+
+    // Merge incoming team with existing `team` state
+    const mergedTeam = mergeTeam(team, incomingTeam);
+    if ((incomingTeam || []).length > 0) {
+      // optimistic show
+      setTeam(mergedTeam);
     }
-    if (payload.tasks && payload.tasks.length > 0) {
-      setTasks((prev) => {
-        const map = new Map(prev.map((t) => [t.id, t]));
-        payload.tasks!.forEach((t) => {
-          if (!map.has(t.id)) map.set(t.id, t);
-        });
-        return Array.from(map.values());
-      });
+
+    // START parallel member creation (create all tmp members in parallel)
+    // Collect members that need creation (id starts with tmp_ or blank)
+    const membersToCreate = mergedTeam.filter(
+      (m) => !m.id || nid(m.id).startsWith("tmp_")
+    );
+    // Build payloads
+    const memberCreatePromises = membersToCreate.map((m) => {
+      const clientId = nid(m.id).startsWith("tmp_") ? m.id : genTmpId();
+      const payload = { ...m, clientId, workspaceId: activeWorkspaceId };
+      // Return promise that resolves to { status, result, tmpId }
+      return api
+        .createTeamMember(payload)
+        .then((created: any) => ({
+          status: "fulfilled" as const,
+          created,
+          tmpId: clientId,
+        }))
+        .catch((err: any) => ({
+          status: "rejected" as const,
+          err,
+          tmpId: clientId,
+          payload,
+        }));
+    });
+
+    // Wait parallel (non-blocking for tasks) but we need results to map assignees
+    const memberResults = await Promise.allSettled(memberCreatePromises);
+    // tmp -> server id map
+    const tmpToServer = new Map<string, string>();
+    // Apply successes: update team state replacing tmp entries with created ones
+    const createdMembers: any[] = [];
+    for (const r of memberResults) {
+      if (r.status === "fulfilled") {
+        const res = r.value;
+        if (res.status === "fulfilled") {
+          tmpToServer.set(res.tmpId, res.created.id);
+          createdMembers.push(res.created);
+        } else {
+          // rejected during underlying createTeamMember call (promise resolved to object)
+          const maybe = res as any;
+          if (maybe.tmpId && maybe.payload) {
+            // enqueue create_team for offline
+            try {
+              enqueueOp({
+                op: "create_team",
+                payload: maybe.payload,
+                createdAt: new Date().toISOString(),
+              });
+            } catch (e) {
+              console.warn("enqueue create_team failed", e);
+            }
+          }
+        }
+      } else {
+        // promise itself failed unexpectedly; ignore but log
+        console.warn("member creation promise failed unexpectedly", r);
+      }
     }
-    if (payload.team && payload.team.length > 0) {
-      const normalized = normalizeTeamInput(payload.team);
+
+    // If we have actual createdMembers, merge them into team state preferring server objects
+    if (createdMembers.length > 0) {
       setTeam((prev) => {
-        const exist = new Set(prev.map((p) => p.name.toLowerCase()));
-        const toAdd = normalized.filter(
-          (n) => !exist.has(n.name.toLowerCase())
-        );
-        return [...prev, ...toAdd];
+        // replace tmp ids with server objects
+        const map = new Map(prev.map((p) => [p.id, p]));
+        for (const created of createdMembers) {
+          // find any tmp entry matching clientId (we used clientId equal to tmpId)
+          // Some servers return clientId in response; if so prefer lookup
+          const foundKey = Array.from(map.keys()).find(
+            (k) =>
+              k === created.id ||
+              map.get(k)?.id === created.id ||
+              map.get(k)?.clientId === created.clientId
+          );
+          if (foundKey) {
+            map.delete(foundKey);
+          }
+          map.set(created.id, created);
+        }
+        return Array.from(map.values());
       });
     }
-    toast.dark("Imported data applied");
+
+    // Prepare name->id map from newest team (use tmp->server mapping for resolution)
+    const liveTeamSnapshot = (mergedTeam || []).map((m) => ({ ...m }));
+    for (const [tmp, real] of tmpToServer.entries()) {
+      const idx = liveTeamSnapshot.findIndex((x) => nid(x.id) === nid(tmp));
+      if (idx !== -1) liveTeamSnapshot[idx].id = real;
+    }
+    const nameToId = new Map(
+      liveTeamSnapshot.map((m) => [m.name.toLowerCase(), m.id])
+    );
+
+    // Normalize incoming tasks and parse comments
+    const parseComments = (raw: any) => {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === "string") {
+        try {
+          const p = JSON.parse(raw);
+          return Array.isArray(p) ? p : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
+
+    const incomingTasks: Task[] = (payload.tasks || []).map((r: any) => {
+      const baseId = r.id ?? r.ID ?? r.Id ?? "";
+      const id = baseId ? String(baseId) : genTmpId();
+      return {
+        id,
+        clientId: undefined,
+        projectId: (activeProjectId || r.projectId) ?? r.project ?? null,
+        title: r.title ?? r.Title ?? "",
+        description: r.description ?? r.Description ?? null,
+        status: r.status ?? r.Status ?? "todo",
+        assigneeId: r.assigneeId ?? r.assigneeid ?? r.assignee ?? null,
+        assigneeName: r.assigneeName ?? r.assignee ?? null,
+        priority: r.priority ?? r.Priority ?? null,
+        startDate: r.startDate ?? r.StartDate ?? null,
+        dueDate: r.dueDate ?? r.DueDate ?? null,
+        comments: parseComments(r.comments ?? r.Comments ?? r.COMMENT ?? ""),
+        createdAt: r.createdAt ?? r.CreatedAt ?? undefined,
+        updatedAt: r.updatedAt ?? r.UpdatedAt ?? undefined,
+      } as Task;
+    });
+
+    // Dedupe incoming tasks by signature and against existing tasks
+    const makeSig = (t: {
+      title?: string;
+      projectId?: any;
+      startDate?: any;
+      dueDate?: any;
+    }) =>
+      `${(t.title || "").trim().toLowerCase()}|${nid(t.projectId)}|${nid(
+        t.startDate
+      )}|${nid(t.dueDate)}`;
+
+    const existingSignatures = new Set(tasks.map((t) => makeSig(t)));
+
+    const uniqueIncoming = incomingTasks.filter((t) => {
+      const s = makeSig(t);
+      if (!s || existingSignatures.has(s)) return false;
+      existingSignatures.add(s); // avoid duplicates in incoming set itself
+      return true;
+    });
+
+    if (uniqueIncoming.length === 0 && (incomingTeam || []).length === 0) {
+      toast.dark("No new tasks or members to import.");
+      return;
+    }
+
+    // Ensure all incoming tasks have tmp_ ids and map assignee to any real ids if available
+    const preparedTasks = uniqueIncoming.map((t) => {
+      const tmpId = nid(t.id).startsWith("tmp_") ? t.id : genTmpId();
+      // resolve assigneeId by tmpToServer or name map
+      let assigneeId = t.assigneeId ?? null;
+      if (assigneeId && tmpToServer.has(assigneeId))
+        assigneeId = tmpToServer.get(assigneeId)!;
+      if ((!assigneeId || assigneeId === "") && t.assigneeName) {
+        const found = nameToId.get(String(t.assigneeName).toLowerCase());
+        if (found) assigneeId = found;
+      }
+      return {
+        ...t,
+        id: tmpId,
+        projectId: activeProjectId,
+        assigneeId,
+      } as Task;
+    });
+
+    // Optimistic: insert prepared tasks to UI (avoid duplicates by signature)
+    setTasks((prev) => {
+      const prevSig = new Set(prev.map((p) => makeSig(p)));
+      const toAdd = preparedTasks.filter((t) => {
+        const s = makeSig(t);
+        return !prevSig.has(s);
+      });
+      // Put new imported tasks at top
+      return [...toAdd, ...prev];
+    });
+
+    // Create tasks in parallel (each with clientId = tmpId). Collect results.
+    const taskCreatePromises = preparedTasks.map((t) => {
+      const clientId = t.id;
+      const payloadForServer: any = {
+        ...t,
+        clientId,
+        id: undefined,
+        // do not send comments array; will create comments separately
+        comments: undefined,
+        projectId: activeProjectId,
+      };
+      return api
+        .createTask(payloadForServer)
+        .then((created: any) => ({
+          status: "fulfilled" as const,
+          created,
+          tmpId: clientId,
+          comments: t.comments || [],
+        }))
+        .catch((err: any) => ({
+          status: "rejected" as const,
+          err,
+          tmpId: clientId,
+          payload: payloadForServer,
+          comments: t.comments || [],
+        }));
+    });
+
+    const taskResults = await Promise.allSettled(taskCreatePromises);
+
+    // Collect successful creations and failures; record tmp->server mapping
+    const createdTasks: any[] = [];
+    const failedTasksForEnqueue: any[] = [];
+    for (const r of taskResults) {
+      if (r.status === "fulfilled") {
+        const res = r.value;
+        if (res.status === "fulfilled") {
+          tmpToServer.set(res.tmpId, res.created.id);
+          createdTasks.push(res);
+        } else {
+          // underlying promise returned rejected object
+          const maybe = res as any;
+          if (maybe.status === "rejected") {
+            failedTasksForEnqueue.push(maybe);
+          }
+        }
+      } else {
+        console.warn("task creation promise failed unexpectedly", r);
+      }
+    }
+
+    // Replace tmp tasks in state with created server tasks, and dedupe by signature/server id
+    if (createdTasks.length > 0) {
+      setTasks((prev) => {
+        // build signature->task mapping but prefer server-created tasks
+        const sigToTask = new Map<string, Task>();
+        const idToTask = new Map<string, Task>();
+        // first put previous tasks (we will overwrite tmp ones)
+        for (const p of prev) {
+          const pId = nid(p.id);
+          const pSig = makeSig(p);
+          if (!idToTask.has(pId)) idToTask.set(pId, p);
+          if (!sigToTask.has(pSig)) sigToTask.set(pSig, p);
+        }
+        // replace tmp entries with created ones and remove signature duplicates
+        for (const ct of createdTasks) {
+          const created = ct.created;
+          const tmpId = ct.tmpId;
+          const sig = `${(created.title || "").trim().toLowerCase()}|${nid(
+            created.projectId
+          )}|${nid(created.startDate)}|${nid(created.dueDate)}`;
+          // delete any existing entries that share signature but are not the created one
+          if (sigToTask.has(sig)) {
+            const collision = sigToTask.get(sig)!;
+            if (nid(collision.id) !== nid(created.id)) {
+              idToTask.delete(nid(collision.id));
+            }
+          }
+          // delete tmp slot
+          idToTask.delete(nid(tmpId));
+          // set created
+          idToTask.set(nid(created.id), created);
+          sigToTask.set(sig, created);
+        }
+        // return array with created tasks first, then others (preserve previous order for others)
+        const result: Task[] = [];
+        // push created tasks (in same order as createdTasks)
+        for (const ct of createdTasks) result.push(ct.created);
+        for (const p of idToTask.values()) {
+          if (!createdTasks.some((ct) => nid(ct.created.id) === nid(p.id)))
+            result.push(p);
+        }
+        return result;
+      });
+    }
+
+    // For created tasks, create comments in parallel per task
+    const commentCreatePromises: Promise<any>[] = [];
+    for (const ct of createdTasks) {
+      const createdTask = ct.created;
+      const commentsForTask = ct.comments || [];
+      for (const c of commentsForTask) {
+        const payload = {
+          author: c.author ?? c.Author ?? "Imported",
+          body: c.body ?? c.Body ?? String(c) ?? "",
+          attachments: c.attachments ?? c.Attachments ?? [],
+        };
+        const p = api
+          .createComment(createdTask.id, payload)
+          .then((createdComment: any) => ({
+            status: "fulfilled" as const,
+            createdComment,
+            taskId: createdTask.id,
+          }))
+          .catch((err: any) => ({
+            status: "rejected" as const,
+            err,
+            taskId: createdTask.id,
+            payload,
+          }));
+        commentCreatePromises.push(p);
+      }
+    }
+
+    const commentResults = await Promise.allSettled(commentCreatePromises);
+
+    // Apply created comments to tasks state; enqueue failed ones
+    const commentsGroupedByTask = new Map<string, any[]>();
+    for (const r of commentResults) {
+      if (r.status === "fulfilled") {
+        const v = r.value;
+        if (v.status === "fulfilled") {
+          const arr = commentsGroupedByTask.get(v.taskId) ?? [];
+          arr.push(v.createdComment);
+          commentsGroupedByTask.set(v.taskId, arr);
+        } else if (v.status === "rejected") {
+          // enqueue
+          try {
+            enqueueOp({
+              op: "create_comment",
+              payload: { taskId: v.taskId, ...v.payload },
+              createdAt: new Date().toISOString(),
+            });
+          } catch (e) {
+            console.warn("enqueue create_comment failed", e);
+          }
+        }
+      } else {
+        console.warn("comment promise failed unexpectedly", r);
+      }
+    }
+
+    // Merge created comments into tasks state
+    if (commentsGroupedByTask.size > 0) {
+      setTasks((prev) =>
+        prev.map((t) => {
+          const id = nid(t.id);
+          if (commentsGroupedByTask.has(id)) {
+            return {
+              ...t,
+              comments: [
+                ...(t.comments || []),
+                ...(commentsGroupedByTask.get(id) || []),
+              ],
+            };
+          }
+          return t;
+        })
+      );
+    }
+
+    // Enqueue failed task creates along with their comments (for tasks that failed creation)
+    for (const f of failedTasksForEnqueue) {
+      try {
+        enqueueOp({
+          op: "create_task",
+          payload: f.payload,
+          createdAt: new Date().toISOString(),
+        });
+        for (const c of f.comments || []) {
+          enqueueOp({
+            op: "create_comment",
+            payload: {
+              taskId: f.tmpId,
+              author: c.author ?? "Imported",
+              body: c.body ?? String(c) ?? "",
+              attachments: c.attachments ?? [],
+            },
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.warn("enqueue failed for task/comments", e);
+      }
+    }
+
+    toast.dark(
+      "Imported tasks & members applied (parallellized; syncing in background)"
+    );
   }
 
-  // Build columns for TaskView
   const projectTasks = tasks.filter(
     (t) => nid(t.projectId) === nid(activeProjectId)
   );
@@ -947,7 +1512,6 @@ export default function ProjectManagement() {
     },
   ];
 
-  // Render inside QueryClientProvider to ensure hooks work
   return (
     <QueryClientProvider client={qcRef.current}>
       <div className="fixed z-20 inset-0 flex bg-white dark:bg-gray-900 text-slate-900 dark:text-slate-100">
@@ -958,16 +1522,16 @@ export default function ProjectManagement() {
           projects={projects}
           activeProjectId={activeProjectId}
           setActiveProjectId={setActiveProjectId}
-          addProject={(name) => {
+          addProject={(payload: any) => {
             if (!activeWorkspaceId) {
               toast.dark("Select a workspace first");
               return;
             }
-
             const p: Project = {
               id: `tmp_${Math.random().toString(36).slice(2, 9)}`,
-              name,
-              workspaceId: activeWorkspaceId, // <-- penting
+              name: payload.name,
+              description: payload.description,
+              workspaceId: activeWorkspaceId,
             };
 
             setProjects((s) => [...s, p]);
@@ -989,7 +1553,6 @@ export default function ProjectManagement() {
                   )
                 );
                 setActiveProjectId((cur) => (cur === p.id ? created.id : cur));
-                toast.dark(`Project "${created.name}" created`);
               })
               .catch(() => {
                 try {
@@ -999,19 +1562,19 @@ export default function ProjectManagement() {
                       ...p,
                       clientId: p.id,
                       workspaceId: activeWorkspaceId,
-                    }, // <-- include workspaceId
+                    },
                     createdAt: new Date().toISOString(),
                   });
                 } catch (err) {
                   console.log(err);
                 }
-                toast.dark("Project queued to sync");
               });
           }}
           team={team}
           removeTeamMember={(id) => removeTeamMember(id)}
           addTeamMember={(m) => addTeamMember(m)}
           removeProject={(id) => removeProject(id)}
+          isPlaySound={isPlaySound}
         />
 
         <main className="flex-1 h-full overflow-auto">
@@ -1020,6 +1583,7 @@ export default function ProjectManagement() {
               <h2 className="text-2xl font-bold">
                 {projects.find((x) => x.id === activeProjectId)?.name || "—"}
               </h2>
+
               <div className="flex items-center gap-5">
                 <button
                   onClick={() => handleAddTask("New Task")}
@@ -1037,161 +1601,7 @@ export default function ProjectManagement() {
                   projects={projects}
                   tasks={tasks}
                   team={team}
-                  onImport={(payload: any) => {
-                    // Projects: upsert by id, overwrite fields from import
-                    if (payload.projects) {
-                      setProjects((prev) => {
-                        const map = new Map(prev.map((p) => [p.id, p]));
-                        payload.projects.forEach((p: any) => {
-                          if (!p.id) return;
-                          const existing = map.get(p.id) ?? {};
-                          // merge: prefer imported fields, fallback to existing ones
-                          map.set(p.id, {
-                            ...existing,
-                            ...p,
-                          });
-                        });
-                        return Array.from(map.values());
-                      });
-                    }
-
-                    // Team: normalize incoming names -> TeamMember[] using existing ids if present
-                    // We will create normalized list from payload.team (if it's string[] or objects),
-                    // but also allow payload to include full team rows (id, name, role, email, photo).
-                    if (payload.team) {
-                      // payload.team might be string[] (names) or array of objects (rows) depending on importer
-                      const incomingTeamObjs: TeamMember[] = (
-                        payload.team || []
-                      ).map((r: any) => {
-                        if (typeof r === "string") {
-                          return { id: "", name: r } as TeamMember;
-                        }
-                        // allow object rows exported earlier
-                        return {
-                          id: r.id ?? r.ID ?? "",
-                          name: r.name ?? r.Name ?? r.username ?? "",
-                          role: r.role ?? r.Role ?? null,
-                          email: r.email ?? r.Email ?? null,
-                          photo: r.photo ?? r.Photo ?? null,
-                        } as TeamMember;
-                      });
-
-                      // normalize (your existing util) will fill ids for missing names if needed
-                      const normalized = normalizeTeamInput(incomingTeamObjs);
-
-                      setTeam((prev) => {
-                        const byId = new Map(
-                          prev.filter((p) => !!p.id).map((p) => [p.id, p])
-                        );
-                        const byNameLower = new Map(
-                          prev.map((p) => [p.name.toLowerCase(), p])
-                        );
-
-                        for (const n of normalized) {
-                          if (n.id && byId.has(n.id)) {
-                            // update existing by id (overwrite fields)
-                            const ex = byId.get(n.id)!;
-                            byId.set(n.id, { ...ex, ...n });
-                          } else if (
-                            n.name &&
-                            byNameLower.has(n.name.toLowerCase())
-                          ) {
-                            // update existing by name (no id)
-                            const ex = byNameLower.get(n.name.toLowerCase())!;
-                            // prefer existing id if present
-                            const idToUse = ex.id || n.id || "";
-                            const merged = { ...ex, ...n, id: idToUse };
-                            if (idToUse) byId.set(idToUse, merged);
-                            else byNameLower.set(n.name.toLowerCase(), merged);
-                          } else {
-                            // new entry: if it has id use byId, else push into byNameLower
-                            if (n.id) byId.set(n.id, n);
-                            else byNameLower.set(n.name.toLowerCase(), n);
-                          }
-                        }
-
-                        // combine maps back into array, preserving existing order-ish (id map first then names)
-                        const result: TeamMember[] = [];
-                        for (const v of byId.values()) result.push(v);
-                        for (const v of byNameLower.values()) {
-                          // avoid duplicates (by name)
-                          if (
-                            !result.some(
-                              (r) =>
-                                r.name.toLowerCase() === v.name.toLowerCase()
-                            )
-                          )
-                            result.push(v);
-                        }
-                        return result;
-                      });
-                    }
-
-                    // Tasks: upsert by id and also normalize fields and resolve assigneeId if only assigneeName given
-                    if (payload.tasks) {
-                      setTasks((prev) => {
-                        const map = new Map(prev.map((t) => [t.id, t]));
-                        // create a quick map of current team (name->id) to help resolving assigneeName -> assigneeId
-                        const teamByName = new Map(
-                          team.map((m) => [m.name.toLowerCase(), m.id])
-                        );
-                        const teamById = new Map(team.map((m) => [m.id, m]));
-
-                        payload.tasks.forEach((t: any) => {
-                          if (!t.id) {
-                            // If incoming task has no id, we skip (or you may choose to generate a local id)
-                            return;
-                          }
-
-                          // normalize incoming fields
-                          const normalized: any = {
-                            ...t,
-                            // normalize empty strings to null for optional fields you want null
-                            assigneeId:
-                              t.assigneeId === "" ? null : t.assigneeId ?? null,
-                            assigneeName: t.assigneeName ?? t.assignee ?? null,
-                            priority: t.priority ?? null,
-                            startDate: t.startDate ?? null,
-                            dueDate: t.dueDate ?? null,
-                          };
-
-                          // if assigneeId missing but assigneeName present, try to resolve using current team
-                          if (
-                            (!normalized.assigneeId ||
-                              normalized.assigneeId === "") &&
-                            normalized.assigneeName
-                          ) {
-                            const foundId = teamByName.get(
-                              String(normalized.assigneeName).toLowerCase()
-                            );
-                            if (foundId) normalized.assigneeId = foundId;
-                          }
-
-                          // try to parse comments if they are JSON string (import/export roundtrip)
-                          if (typeof t.comments === "string") {
-                            try {
-                              const parsed = JSON.parse(t.comments);
-                              normalized.comments = Array.isArray(parsed)
-                                ? parsed
-                                : [];
-                            } catch {
-                              normalized.comments = [];
-                            }
-                          } else {
-                            normalized.comments = t.comments ?? [];
-                          }
-
-                          const existing = map.get(t.id);
-                          // merge: overwrite existing with incoming fields (incoming takes precedence)
-                          map.set(t.id, { ...(existing ?? {}), ...normalized });
-                        });
-
-                        return Array.from(map.values());
-                      });
-                    }
-
-                    toast.dark("Imported data applied");
-                  }}
+                  onImport={(payload: any) => handleImport(payload)}
                 />
 
                 <button
@@ -1204,8 +1614,16 @@ export default function ProjectManagement() {
                     <Sun className="w-4 h-4 text-amber-500" />
                   )}
                 </button>
-
-                {/* PROFILE ICON + DROPDOWN */}
+                <button
+                  onClick={onOffSound}
+                  className="py-1 px-2 rounded-sm ml-2 hover:bg-[#334155] transition"
+                >
+                  {!isPlaySound ? (
+                    <VolumeX className="w-5 h-5 text-gray-300" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-cyan-400" />
+                  )}
+                </button>
                 <div className="relative profile-menu-area">
                   <button
                     onClick={() => setShowProfileMenu((v) => !v)}
@@ -1251,27 +1669,33 @@ export default function ProjectManagement() {
             <TaskView
               currentMemberId={authTeamMemberId}
               columns={columns}
-              onDropTo={(status) => {
-                if (!dragTaskId) return;
+              onDropTo={(status, draggedId) => {
+                const idToUse = draggedId ?? dragTaskId;
+                if (!idToUse) {
+                  console.warn("drop ignored — no dragged id");
+                  return;
+                }
+
+                // lakukan update lokal + API menggunakan idToUse
                 setTasks((s) =>
                   s.map((t) =>
-                    nid(t.id) === nid(dragTaskId) ? { ...t, status } : t
+                    nid(t.id) === nid(idToUse) ? { ...t, status } : t
                   )
                 );
+
                 updateTaskMutation.mutate(
-                  { id: dragTaskId, patch: { status } },
+                  { id: idToUse, patch: { status } },
                   {
                     onError: () => {
                       try {
                         enqueueOp({
                           op: "update_task",
-                          payload: { id: dragTaskId, patch: { status } },
+                          payload: { id: idToUse, patch: { status } },
                           createdAt: new Date().toISOString(),
                         });
                       } catch (_) {
                         console.log("update task failed");
                       }
-                      toast.dark("Move queued (offline)");
                     },
                     onSettled: () =>
                       qcRef.current.invalidateQueries([
@@ -1280,15 +1704,18 @@ export default function ProjectManagement() {
                       ]),
                   }
                 );
+
+                // reset drag state
                 setDragTaskId(null);
               }}
               onDragStart={handleDragStart}
-              onDrag={handleDrag} // new prop
-              onDragEnd={handleDragEnd} // new prop
+              onDrag={handleDrag}
+              onDragEnd={handleDragEnd}
               dragPos={dragPos}
               dragTaskId={dragTaskId}
               onSelectTask={(t) => setSelectedTask(t)}
               team={team}
+              startPointerDrag={startPointerDrag}
             />
 
             {selectedTask && (
@@ -1298,16 +1725,13 @@ export default function ProjectManagement() {
                 currentMemberId={authTeamMemberId}
                 task={selectedTask}
                 onClose={() => {
-                  playSound("/sounds/close.mp3", true);
                   setSelectedTask(null);
                 }}
                 onSave={async (u) => {
-                  console.log(u);
                   await handleUpdateTask(u);
-                  setSelectedTask(u);
+                  setSelectedTask(null);
                 }}
                 onAddComment={async (author, body, attachments) => {
-                  // optimistic add: create local comment with temp id
                   const tmpComment = {
                     id: `c_tmp_${Math.random().toString(36).slice(2, 9)}`,
                     author,
@@ -1315,10 +1739,10 @@ export default function ProjectManagement() {
                     createdAt: new Date().toISOString(),
                     attachments,
                   };
-                  // update local tasks state
+
                   setTasks((s) =>
                     s.map((t) =>
-                      nid(t.id) === nid(selectedTask.id)
+                      nid(t.id) === nid(selectedTask!.id)
                         ? {
                             ...t,
                             comments: [...(t.comments || []), tmpComment],
@@ -1327,33 +1751,29 @@ export default function ProjectManagement() {
                     )
                   );
 
-                  // find latest task reference from local state (not stale selectedTask)
+                  playSound("/sounds/send.mp3", isPlaySound);
+
                   const latest =
-                    tasks.find((t) => nid(t.id) === nid(selectedTask.id)) ||
-                    selectedTask;
+                    tasks.find((t) => nid(t.id) === nid(selectedTask!.id)) ||
+                    selectedTask!;
 
                   try {
-                    // Attempt create via API
                     const created = await api.createComment(latest.id, {
                       author,
                       body,
                       attachments,
                     });
-                    // replace tmpComment with server-created comment (if id differs)
                     setTasks((s) =>
                       s.map((t) => {
                         if (nid(t.id) !== nid(latest.id)) return t;
                         const cs = (t.comments || []).map((c) =>
                           c.id === tmpComment.id ? created : c
                         );
-                        // if created is not in list (e.g. server returns full list or single comment), ensure it's present
                         const has = cs.some((c) => c.id === created.id);
                         return { ...t, comments: has ? cs : [...cs, created] };
                       })
                     );
-                    toast.dark("Comment added");
                   } catch (err) {
-                    // enqueue create_comment op for later syncing
                     try {
                       enqueueOp({
                         op: "create_comment",
@@ -1368,16 +1788,13 @@ export default function ProjectManagement() {
                     } catch (_) {
                       console.log("create_comment failed");
                     }
-                    toast.dark("Comment queued (offline)");
                   } finally {
-                    // invalidate tasks query so when server back online it will refresh
                     qcRef.current.invalidateQueries(["tasks", activeProjectId]);
                   }
                 }}
                 team={team}
                 dark={dark}
                 onDelete={async (id: string) => {
-                  // delegate ke handler (TaskModal expects a promise)
                   await handleDeleteTask(id);
                 }}
               />
@@ -1385,7 +1802,7 @@ export default function ProjectManagement() {
           </div>
         </main>
       </div>
-      {/* EDIT PROFILE MODAL */}
+
       <EditProfileModal
         open={showEditProfile}
         onClose={() => setShowEditProfile(false)}

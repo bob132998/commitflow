@@ -86,7 +86,6 @@ export default function TeamModal({
       };
 
       onCreate(member);
-      toast.dark(`${trimmed} added`);
 
       setName("");
       setPhone("");

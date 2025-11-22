@@ -115,13 +115,23 @@ export class ProjectManagementController {
   }
 
   @Put("tasks/:id")
-  updateTask(@Param("id") id: string, @Body() dto: UpdateTaskDto) {
-    return this.svc.updateTask(id, dto);
+  updateTask(
+    @Param("id") id: string,
+    @Body() dto: UpdateTaskDto,
+    @Req() req: any
+  ) {
+    const userId = req.user.userId;
+    return this.svc.updateTask(id, dto, userId);
   }
 
   @Patch("tasks/:id")
-  patchTask(@Param("id") id: string, @Body() patch: PatchTaskDto) {
-    return this.svc.patchTask(id, patch);
+  patchTask(
+    @Param("id") id: string,
+    @Body() patch: PatchTaskDto,
+    @Req() req: any
+  ) {
+    const userId = req.user.userId;
+    return this.svc.patchTask(id, patch, userId);
   }
 
   @Delete("tasks/:id")

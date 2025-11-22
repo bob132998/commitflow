@@ -122,7 +122,6 @@ export default function EditProfileModal({
         (updated as any).password = payload.password;
       }
 
-      toast.dark("Profile saved");
       onSave(updated);
       onClose();
     } catch (err: any) {
