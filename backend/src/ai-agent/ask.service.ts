@@ -71,32 +71,32 @@ export class AskService {
    * Helper: execute a tool by name (serial)
    * Returns the raw tool result (JS object/array) or { error: ... }
    */
-  private async execToolByName(fn: string, args: any) {
+  private async execToolByName(fn: string, args: any, userId: string) {
     try {
       if (fn === "getRepos") {
         return await getRepos();
       } else if (fn === "getContributors") {
         return await getContributors(args.repo);
       } else if (fn === "getProjects") {
-        return await getProjects();
+        return await getProjects(userId);
       } else if (fn === "getMembers") {
-        return await getMembers();
+        return await getMembers(userId);
       } else if (fn === "getAllTasks") {
-        return await getAllTasks(args?.projectId || "");
+        return await getAllTasks(args?.projectId || "", userId);
       } else if (fn === "getTodoTasks") {
-        return await getTodoTasks(args?.projectId || "");
+        return await getTodoTasks(args?.projectId || "", userId);
       } else if (fn === "getInProgressTasks") {
-        return await getInProgressTasks(args?.projectId || "");
+        return await getInProgressTasks(args?.projectId || "", userId);
       } else if (fn === "getDoneTasks") {
-        return await getDoneTasks(args?.projectId || "");
+        return await getDoneTasks(args?.projectId || "", userId);
       } else if (fn === "getUnassignedTasks") {
-        return await getUnassignedTasks(args?.projectId || "");
+        return await getUnassignedTasks(args?.projectId || "", userId);
       } else if (fn === "getUrgentTasks") {
-        return await getUrgentTasks(args?.projectId || "");
+        return await getUrgentTasks(args?.projectId || "", userId);
       } else if (fn === "getLowTasks") {
-        return await getLowTasks(args?.projectId || "");
+        return await getLowTasks(args?.projectId || "", userId);
       } else if (fn === "getMediumTasks") {
-        return await getMediumTasks(args?.projectId || "");
+        return await getMediumTasks(args?.projectId || "", userId);
       } else {
         return { error: `Unknown tool: ${fn}` };
       }
@@ -223,7 +223,7 @@ export class AskService {
           } else {
             // Execute actual tool
             this.emitToolCall(socket, fn, args);
-            toolResult = await this.execToolByName(fn, args);
+            toolResult = await this.execToolByName(fn, args, userId ?? "");
             this.emitToolResult(socket, fn, toolResult);
 
             // push tool result into conversation

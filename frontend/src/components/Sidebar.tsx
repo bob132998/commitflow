@@ -69,7 +69,7 @@ function nameToHue(name = "") {
   return name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
 }
 
-function handleKeyActivate(e, fn) {
+function handleKeyActivate(e: any, fn: any) {
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
     fn();
@@ -457,7 +457,7 @@ export default function Sidebar({
           </div>
           {/* projects list */}
           <div className="space-y-2 mb-4 mt-4">
-            {projects.map((p, idx) => {
+            {projects.map((p: any, idx: number) => {
               const palette = PROJECT_PALETTE[idx % PROJECT_PALETTE.length];
               const active = p.id === activeProjectId;
 
@@ -516,7 +516,7 @@ export default function Sidebar({
                             {p.name}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {p.meta ?? ""}
+                            {p?.meta ?? ""}
                           </div>
                         </div>
                       </div>
@@ -579,7 +579,7 @@ export default function Sidebar({
           </div>
           {/* team list */}
           <div className="space-y-2 mb-4">
-            {team.map((member) => {
+            {team.map((member: any) => {
               const hue = nameToHue(member.name ?? "user");
               // pilih lightness berdasarkan theme agar contrast baik
               const avatarBg = isDark
@@ -591,7 +591,7 @@ export default function Sidebar({
 
               const initials = (member.name ?? "No Name")
                 .split(" ")
-                .map((n) => n[0] ?? "")
+                .map((n: any) => n[0] ?? "")
                 .slice(0, 2)
                 .join("")
                 .toUpperCase();
@@ -628,19 +628,19 @@ export default function Sidebar({
                     )}
 
                     {/* small presence/status dot (optional) */}
-                    {member.status && (
+                    {member?.status && (
                       <span
                         className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white dark:ring-black`}
                         style={{
                           background:
-                            member.status === "online"
+                            member?.status === "online"
                               ? "rgb(34 197 94)"
-                              : member.status === "away"
+                              : member?.status === "away"
                               ? "rgb(250 204 21)"
                               : "rgb(148 163 184)",
                         }}
                         aria-hidden="true"
-                        title={member.status}
+                        title={member?.status}
                       />
                     )}
                   </div>

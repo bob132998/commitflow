@@ -14,7 +14,7 @@ function hslaStr(h: number, s = 75, l = 50, a = 1) {
   return `hsla(${h} ${s}% ${l}% / ${a})`;
 }
 
-function formatDateShort(d) {
+function formatDateShort(d: any) {
   if (!d) return null;
   // expect ISO-like YYYY-MM-DD or any Date-parsable string
   const dt = new Date(d);
@@ -47,7 +47,7 @@ function parseDateOnlySafe(v?: string | null) {
   return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
 }
 
-function relativeInfo(d) {
+function relativeInfo(d: any) {
   if (!d) return null;
   const dt = new Date(d);
   const now = new Date();
