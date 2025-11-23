@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1
+
+### Patch Changes
+
+- 638411c: feat: add photo field to User model and update related services
+
 ## 1.3.0
 
 ### Minor Changes
