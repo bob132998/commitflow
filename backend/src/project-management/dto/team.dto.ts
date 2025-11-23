@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsOptional, IsString } from "class-validator";
 
 export class CreateTeamMemberDto {
   @IsString()
@@ -11,6 +11,10 @@ export class CreateTeamMemberDto {
   @IsOptional()
   @IsString()
   email?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isAdmin?: boolean;
 
   @IsOptional()
   @IsString()
@@ -36,6 +40,10 @@ export class UpdateTeamMemberDto {
   @IsOptional()
   @IsString()
   role?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isAdmin?: boolean;
 
   @IsOptional()
   @IsString()

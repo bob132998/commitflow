@@ -1,6 +1,6 @@
 // frontend/src/components/TeamDetailModal.tsx
 import React from "react";
-import { X, Trash2, Send } from "lucide-react";
+import { X, Trash2, Send, PencilIcon } from "lucide-react";
 import Swal from "sweetalert2";
 import type { TeamMember } from "../types";
 import { toast } from "react-toastify";
@@ -13,11 +13,15 @@ export default function TeamDetailModal({
   open,
   onClose,
   onDelete,
+  openEditProfileTeam,
+  isAdmin,
 }: {
   member?: TeamMember | null;
   open: boolean;
   onClose: () => void;
   onDelete: (id: string) => void;
+  openEditProfileTeam: (member: any) => void;
+  isAdmin: boolean;
 }) {
   if (!open || !member) return null;
 
@@ -112,14 +116,24 @@ export default function TeamDetailModal({
             <span className="text-slate-200">: {member.role || "—"}</span>
           </div>
         </div>
-
-        <button
-          onClick={handleDelete}
-          title="Remove member"
-          className="px-4 py-2 mt-8 bg-gray-800 hover:bg-red-400 text-white rounded-lg shadow-md text-sm flex gap-2"
-        >
-          <Trash2 size={16} /> Delete
-        </button>
+        {isAdmin && (
+          <div className="flex gap-2">
+            <button
+              onClick={handleDelete}
+              title="Remove member"
+              className="px-4 py-2 mt-8 bg-gray-800 hover:bg-red-400 text-white rounded-lg shadow-md text-sm flex gap-2"
+            >
+              <Trash2 size={16} /> Delete
+            </button>
+            <button
+              onClick={() => openEditProfileTeam(member)}
+              title="Edit member"
+              className="px-4 py-2 mt-8 bg-gray-800 hover:bg-green-400 text-white rounded-lg shadow-md text-sm flex gap-2"
+            >
+              <PencilIcon size={16} /> Edit
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

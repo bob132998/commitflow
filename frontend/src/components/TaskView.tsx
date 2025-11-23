@@ -20,7 +20,11 @@ export default function TaskView({
 }: {
   currentMemberId: any;
   columns: { key: Task["status"]; title: string; items: Task[] }[];
-  onDropTo: (s: Task["status"], draggedId?: string) => void;
+  onDropTo: (
+    s: Task["status"],
+    draggedId?: string,
+    insertIndex?: number
+  ) => void;
   onDragStart: (e: React.DragEvent, id: string) => void;
   onDrag: (e: React.DragEvent) => void;
   onDragEnd: (e: React.DragEvent) => void;

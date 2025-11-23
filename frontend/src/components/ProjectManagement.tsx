@@ -31,6 +31,7 @@ import { useAuthStore } from "../utils/store";
 import EditProfileModal from "./EditProfileModal";
 import { playSound } from "../utils/playSound";
 import { getState, saveState } from "../utils/local";
+import EditMemberModal from "./EditMemberModal";
 
 // Create local QueryClient so this component works even if app not wrapped globally
 const queryClient = new QueryClient();
@@ -91,6 +92,8 @@ export default function ProjectManagement({
   );
   const userWorkspaceActive =
     userWorkspace.length > 0 ? userWorkspace[0] : user;
+
+  const isAdmin = userWorkspaceActive?.isAdmin ?? false;
   console.log("userWorkspace", userWorkspaceActive);
   if (!userWorkspaceActive?.photo) {
     userWorkspaceActive.photo = user?.photo ?? null;
@@ -162,6 +165,13 @@ export default function ProjectManagement({
     setShowEditProfile(true);
   };
 
+  const openEditProfileTeam = async (member: any) => {
+    setShowProfileMenu(false);
+    setEditMember(member ?? null);
+
+    setShowEditProfile(true);
+  };
+
   const handleSync = async () => {
     setSyncing(true);
     setIsRequestSync(!isRequestSync);
@@ -208,6 +218,40 @@ export default function ProjectManagement({
     }
   };
 
+  const handleSaveMember = async (updated: TeamMember) => {
+    setTeam((prev) => {
+      const map = new Map(prev.map((p) => [p.id, p]));
+      map.set(updated.id, updated);
+      return Array.from(map.values());
+    });
+
+    try {
+      const payload = {
+        name: updated.name,
+        email: updated.email ?? null,
+        role: updated.role ?? null,
+        photo: updated.photo ?? null,
+        phone: updated.phone ?? null,
+        password: updated.password ?? null,
+        isAdmin: updated.isAdmin ?? false,
+      };
+      const saved = await api.updateTeamMember(updated.id, payload);
+
+      setTeam((prev) => prev.map((t) => (t.id === saved.id ? saved : t)));
+      window.location.reload();
+    } catch (err) {
+      try {
+        enqueueOp({
+          op: "update_team",
+          payload: { id: updated.id, patch: updated },
+          createdAt: new Date().toISOString(),
+        });
+      } catch (_) {
+        toast.dark("Failed to queue profile update");
+      }
+    }
+  };
+
   const handleLogout = () => {
     logout();
     setShowProfileMenu(false);
@@ -225,6 +269,7 @@ export default function ProjectManagement({
   }, []);
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dragPos, setDragPos] = useState<{
     x: number;
@@ -238,6 +283,154 @@ export default function ProjectManagement({
   });
 
   // panggil ini instead of onDragStart untuk pointer devices
+  // pastikan rafRef & pendingPosRef di top-level
+  // const rafRef = useRef<number | null>(null);
+  // const pendingPosRef = useRef<{x:number;y:number;width:number}|null>(null);
+
+  function findTransformAncestors(el: HTMLElement | null) {
+    const bad: Array<{
+      el: HTMLElement;
+      style: string;
+      computed: CSSStyleDeclaration;
+    }> = [];
+    let cur: HTMLElement | null = el;
+    while (cur && cur !== document.documentElement) {
+      try {
+        const style = getComputedStyle(cur);
+        if (
+          (style.transform && style.transform !== "none") ||
+          (style.filter && style.filter !== "none") ||
+          (style.perspective && style.perspective !== "none") ||
+          (style.willChange &&
+            /\b(transform|top|left|right|bottom)\b/.test(style.willChange)) ||
+          (style.zoom && style.zoom !== "1")
+        ) {
+          bad.push({
+            el: cur,
+            style:
+              style.transform ||
+              style.filter ||
+              style.perspective ||
+              style.zoom,
+            computed: style,
+          });
+        }
+      } catch (err) {
+        // ignore cross-origin or weird nodes
+      }
+      cur = cur.parentElement;
+    }
+    return bad;
+  }
+
+  // helper: find drop column key and insertion index (0..n) based on client coords
+  function findDropTargetAndIndex(clientX: number, clientY: number) {
+    // list of elements from point (topmost first)
+    const els = document.elementsFromPoint(clientX, clientY);
+
+    // 1) try to find a card element under pointer
+    const cardEl = els.find(
+      (el) =>
+        (el as HTMLElement).closest &&
+        (el as HTMLElement).closest("[data-task-id]")
+    );
+    let dropKeyEl: HTMLElement | null = null;
+    let insertBeforeTaskId: string | null = null;
+    let insertIndex: number | null = null;
+    let columnEl: HTMLElement | null = null;
+
+    if (cardEl) {
+      // get the actual card container (closest with data-task-id)
+      const cardContainer = (cardEl as HTMLElement).closest(
+        "[data-task-id]"
+      ) as HTMLElement | null;
+      if (cardContainer) {
+        const targetTaskId =
+          cardContainer.dataset.taskId ??
+          (cardContainer.id
+            ? cardContainer.id.replace(/^taskcard-/, "")
+            : undefined);
+
+        // find column that contains this card
+        columnEl = cardContainer.closest(
+          "[data-drop-key]"
+        ) as HTMLElement | null;
+        dropKeyEl = columnEl;
+
+        // measure card rect to decide above/below
+        const rect = cardContainer.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+
+        if (clientY <= midY) {
+          // insert before this card
+          insertBeforeTaskId = targetTaskId ?? null;
+        } else {
+          // insert after: we will compute index as (indexOf(target)+1)
+          insertBeforeTaskId = null;
+          // we'll find insertIndex by locating the position after target
+          // but to keep simple API, we'll compute insertIndex by scanning column children below
+        }
+      }
+    }
+
+    // 2) if no card directly under pointer, find column element (empty area, end of column)
+    if (!dropKeyEl) {
+      const col = els.find(
+        (el) =>
+          (el as HTMLElement).closest &&
+          (el as HTMLElement).closest("[data-drop-key]")
+      );
+      columnEl = (col as HTMLElement)?.closest?.(
+        "[data-drop-key]"
+      ) as HTMLElement | null;
+      dropKeyEl = columnEl;
+    }
+
+    // If we found a column element, compute insertIndex by scanning its children (cards order)
+    if (dropKeyEl) {
+      const dropKey = (dropKeyEl as HTMLElement).dataset.dropKey;
+      // get array of card elements inside column in DOM order
+      const cardsInColumn = Array.from(
+        (dropKeyEl as HTMLElement).querySelectorAll("[data-task-id]")
+      ) as HTMLElement[];
+      if (cardsInColumn.length === 0) {
+        insertIndex = 0;
+      } else if (cardEl && insertBeforeTaskId) {
+        // find index of that task
+        insertIndex = cardsInColumn.findIndex(
+          (c) =>
+            (c.dataset.taskId ?? c.id.replace(/^taskcard-/, "")) ===
+            insertBeforeTaskId
+        );
+        if (insertIndex === -1) insertIndex = cardsInColumn.length; // fallback to end
+      } else if (cardEl) {
+        // pointer was on lower half of a card -> insert after that card
+        const targetCardEl = (cardEl as HTMLElement).closest(
+          "[data-task-id]"
+        ) as HTMLElement | null;
+        const idx = cardsInColumn.findIndex((c) => c === targetCardEl);
+        insertIndex = idx === -1 ? cardsInColumn.length : idx + 1;
+      } else {
+        // pointer on empty column area -> append at end
+        // find first card whose top is > clientY to insert before, otherwise end
+        let found = false;
+        for (let i = 0; i < cardsInColumn.length; i++) {
+          const r = cardsInColumn[i].getBoundingClientRect();
+          if (clientY < r.top + r.height / 2) {
+            insertIndex = i;
+            found = true;
+            break;
+          }
+        }
+        if (!found) insertIndex = cardsInColumn.length;
+      }
+
+      return { dropKey: dropKey as string | undefined, insertIndex };
+    }
+
+    return { dropKey: undefined, insertIndex: null };
+  }
+
   function startPointerDrag(
     id: string,
     clientX: number,
@@ -248,90 +441,204 @@ export default function ProjectManagement({
     // set dragging id asap
     setDragTaskId(id);
 
-    // compute rect (viewport coords)
-    const rect = el?.getBoundingClientRect();
+    // try to use the provided element's rect first
+    let rect = el?.getBoundingClientRect() ?? null;
+
+    // If pointer is outside rect, try to find the topmost element under pointer
+    const pointerOutside =
+      !rect ||
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom;
+
+    if (pointerOutside) {
+      try {
+        const hit = document.elementFromPoint(
+          clientX,
+          clientY
+        ) as HTMLElement | null;
+        if (hit) {
+          // Prefer the closest ancestor that looks like a task card (data-task-id or id starting with taskcard-)
+          const candidate =
+            (hit.closest && (hit.closest("[data-task-id]") as HTMLElement)) ||
+            (hit.closest &&
+              (hit.closest("[id^='taskcard-']") as HTMLElement)) ||
+            hit;
+          const candRect = candidate?.getBoundingClientRect();
+          if (candRect && isFinite(candRect.left)) {
+            rect = candRect;
+          }
+        }
+      } catch (e) {
+        // ignore; keep original rect if any
+      }
+    }
+
+    // If still no rect, fallback to a safe default size/position relative to pointer
     const width = rect?.width ?? 300;
+    const height = rect?.height ?? 56;
 
-    // IMPORTANT: offsetRef uses client coords (viewport)
-    offsetRef.current = {
-      x: rect ? clientX - rect.left : 12,
-      y: rect ? clientY - rect.top : 12,
-      width,
-    };
+    // compute offset (cursor -> element) and clamp into bounds
+    let offsetX = rect ? clientX - rect.left : Math.round(width / 2);
+    let offsetY = rect ? clientY - rect.top : Math.round(height / 2);
 
-    // If we want preview to appear exactly on top of original card,
-    // set dragPos to the card's top-left (viewport)
+    // clamp values (prevent weird big offsets)
+    offsetX = Math.max(0, Math.min(offsetX, width));
+    offsetY = Math.max(0, Math.min(offsetY, height));
+
+    offsetRef.current = { x: offsetX, y: offsetY, width };
+
+    // Set initial drag position so preview appears under the pointer immediately
     const initial = {
-      x: rect ? rect.left : clientX - offsetRef.current.x,
-      y: rect ? rect.top : clientY - offsetRef.current.y,
+      x: clientX - offsetRef.current.x,
+      y: clientY - offsetRef.current.y,
       width,
     };
+
+    // cancel pending RAF if any
+    pendingPosRef.current = null;
+    if (rafRef.current != null) {
+      window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+
+    // set initial preview position immediately (no jump)
     setDragPos(initial);
 
-    // Now attach pointermove/pointerup to track movement (RAF-batched)
-    let localRaf: number | null = null;
+    let lastScrollX = window.scrollX;
+    let lastScrollY = window.scrollY;
 
+    const onScroll = () => {
+      // compute how much page scrolled since drag started
+      const dx = window.scrollX - lastScrollX;
+      const dy = window.scrollY - lastScrollY;
+      if (dx === 0 && dy === 0) return;
+
+      // Adjust dragPos by scroll delta so preview stays under pointer
+      setDragPos((prev) => ({
+        x: prev.x - dx,
+        y: prev.y - dy,
+        width: prev.width,
+      }));
+
+      // update last known scroll (in case of continuous scroll)
+      lastScrollX = window.scrollX;
+      lastScrollY = window.scrollY;
+    };
+
+    // pointer tracking: batch updates via RAF
     const onMove = (ev: PointerEvent) => {
+      // guard: ignore invalid coords
+      if (typeof ev.clientX !== "number" || typeof ev.clientY !== "number")
+        return;
+
       pendingPosRef.current = {
         x: ev.clientX - offsetRef.current.x,
         y: ev.clientY - offsetRef.current.y,
         width: offsetRef.current.width,
       };
-      if (localRaf == null) {
-        localRaf = window.requestAnimationFrame(() => {
-          if (pendingPosRef.current) {
-            setDragPos(pendingPosRef.current);
+
+      if (rafRef.current == null) {
+        rafRef.current = window.requestAnimationFrame(() => {
+          const p = pendingPosRef.current;
+          if (p) {
+            setDragPos(p);
             pendingPosRef.current = null;
           }
-          localRaf = null;
+          rafRef.current = null;
         });
       }
     };
 
     const onUp = (ev: PointerEvent) => {
-      if (localRaf != null) {
-        window.cancelAnimationFrame(localRaf);
-        localRaf = null;
+      // cancel raf
+      if (rafRef.current != null) {
+        window.cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+        pendingPosRef.current = null;
       }
 
-      // perform hit-test/drop
-      const els = document.elementsFromPoint(ev.clientX, ev.clientY);
-      const dropEl = els.find((el) =>
-        (el as HTMLElement).closest("[data-drop-key]")
-      );
-      const dropKeyEl = dropEl
-        ? ((dropEl as HTMLElement).closest("[data-drop-key]") as HTMLElement)
-        : null;
-      const dropKey = dropKeyEl
-        ? (dropKeyEl.dataset.dropKey as any)
-        : undefined;
+      try {
+        const { dropKey, insertIndex } = findDropTargetAndIndex(
+          ev.clientX,
+          ev.clientY
+        );
 
-      if (dropKey) {
-        // use the same update logic as onDropTo
-        const idToUse = id;
-        setTasks((s) =>
-          s.map((t) =>
-            nid(t.id) === nid(idToUse) ? { ...t, status: dropKey } : t
-          )
-        );
-        updateTaskMutation.mutate(
-          { id: idToUse, patch: { status: dropKey } },
-          {
-            onError: () => {
-              try {
-                enqueueOp({
-                  op: "update_task",
-                  payload: { id: idToUse, patch: { status: dropKey } },
-                  createdAt: new Date().toISOString(),
-                });
-              } catch (e) {
-                console.log(e);
+        if (dropKey != null && typeof insertIndex === "number") {
+          const idToUse = id;
+
+          // Optimistic local update: remove item from old place and insert at new column/index
+          setTasks((s) => {
+            // create deep copy groups: your tasks likely flat; adjust if you store by columns
+            const items = [...s];
+            const idxFrom = items.findIndex((t) => nid(t.id) === nid(idToUse));
+            if (idxFrom === -1) return s;
+
+            const item = items.splice(idxFrom, 1)[0];
+
+            // find insertion position within items by counting tasks currently in that column
+            // assume each task has .status field; compute targetInsertionIndex among same-status tasks
+            const sameStatus = items.filter((t) => t.status === dropKey);
+            // map global insertion index into position in `items` array:
+            // compute index of first occurrence of dropKey column in items to figure absolute index
+            // Simpler: build new array: all before column, then insert, then rest
+            const before = items.filter((t) => t.status !== dropKey);
+            // But easier: we'll compute a new ordering by:
+            const newList: typeof s = [];
+            // push tasks, inserting item when reaching the desired position among dropKey group
+            let inserted = false;
+            let countInDrop = 0;
+            for (let i = 0; i < items.length; i++) {
+              const t = items[i];
+              if (t.status === dropKey) {
+                if (countInDrop === insertIndex && !inserted) {
+                  newList.push({ ...item, status: dropKey });
+                  inserted = true;
+                }
+                newList.push(t);
+                countInDrop++;
+              } else {
+                newList.push(t);
               }
+            }
+            if (!inserted) {
+              // either column empty or insert at end
+              newList.push({ ...item, status: dropKey });
+            }
+            return newList;
+          });
+
+          // send mutation to update status (and position if server supports ordering)
+          updateTaskMutation.mutate(
+            {
+              id: idToUse,
+              patch: {
+                status: dropKey /*, order: insertIndex or relative key*/,
+              },
             },
-            onSettled: () =>
-              qcRef.current.invalidateQueries(["tasks", activeProjectId]),
-          }
-        );
+            {
+              onError: () => {
+                // on error fallback: enqueue op or re-fetch
+                try {
+                  enqueueOp({
+                    op: "update_task",
+                    payload: { id: idToUse, patch: { status: dropKey } },
+                    createdAt: new Date().toISOString(),
+                  });
+                } catch (e) {
+                  console.log(e);
+                }
+              },
+              onSettled: () =>
+                qcRef.current.invalidateQueries(["tasks", activeProjectId]),
+            }
+          );
+        } else {
+          // no valid drop target -> simply reset drag
+        }
+      } catch (err) {
+        console.log("drop hit-test failed", err);
       }
 
       // cleanup
@@ -343,9 +650,18 @@ export default function ProjectManagement({
       window.removeEventListener("pointerup", onUp);
     };
 
-    // attach listeners AFTER setting initial pos so preview immediately visible
-    window.addEventListener("pointermove", onMove, { passive: true });
+    // attach listeners AFTER initial pos set
+    window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
+
+    // attach scroll listener on capture so we get notified quickly
+    window.addEventListener("scroll", onScroll, {
+      passive: true,
+      capture: true,
+    });
+
+    // and in your cleanup (inside onUp) remove it:
+    window.removeEventListener("scroll", onScroll, { capture: true });
   }
 
   // dipassing ke KanbanBoard via TaskView
@@ -386,22 +702,22 @@ export default function ProjectManagement({
 
   function handleDrag(e: React.DragEvent) {
     if (!dragTaskId) return;
+    // some browsers emit clientX/Y = 0 when drag leaves window; ignore those
     if (e.clientX === 0 && e.clientY === 0) return;
 
-    // compute viewport-based target coords
-    const next = {
+    pendingPosRef.current = {
       x: e.clientX - offsetRef.current.x,
       y: e.clientY - offsetRef.current.y,
       width: offsetRef.current.width,
     };
 
-    pendingPosRef.current = next;
-
     if (rafRef.current == null) {
       rafRef.current = window.requestAnimationFrame(() => {
         const p = pendingPosRef.current;
-        if (p) setDragPos(p);
-        pendingPosRef.current = null;
+        if (p) {
+          setDragPos(p);
+          pendingPosRef.current = null;
+        }
         rafRef.current = null;
       });
     }
@@ -1823,6 +2139,8 @@ export default function ProjectManagement({
           addTeamMember={(m) => addTeamMember(m)}
           removeProject={(id) => removeProject(id)}
           isPlaySound={isPlaySound}
+          openEditProfileTeam={openEditProfileTeam}
+          isAdmin={isAdmin}
         />
 
         <main className="flex-1 h-full overflow-auto">
@@ -1837,7 +2155,7 @@ export default function ProjectManagement({
                   onClick={handleSync}
                   disabled={syncing}
                   className={`
-    relative inline-flex items-center gap-2 px-5 py-2.5
+    group relative inline-flex items-center gap-2 px-5 py-2.5
     rounded-2xl text-sm font-semibold backdrop-blur-md
     transition-all duration-300 
     ${
@@ -1856,12 +2174,18 @@ export default function ProjectManagement({
                     className={`transition-transform ${
                       syncing
                         ? "animate-spin text-emerald-400"
-                        : "group-hover:rotate-180 text-white/80"
+                        : "group-hover:rotate-180 text-gray-700 dark:text-white/80"
                     }`}
                   />
 
                   {/* label */}
-                  <span className={syncing ? "text-emerald-400" : "text-white"}>
+                  <span
+                    className={
+                      syncing
+                        ? "text-emerald-400"
+                        : "text-gray-900 dark:text-white"
+                    }
+                  >
                     {syncing ? "Syncing…" : "Sync"}
                   </span>
 
@@ -1875,6 +2199,7 @@ export default function ProjectManagement({
                     <span className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full bg-emerald-400 animate-ping"></span>
                   )}
                 </button>
+
                 <button
                   onClick={() => handleAddTask("New Task")}
                   disabled={creatingTask}
@@ -1890,13 +2215,14 @@ export default function ProjectManagement({
                   />
                   <span>{creatingTask ? "Adding..." : "New Task"}</span>
                 </button>
-
-                <ExportImportControls
-                  projects={projects}
-                  tasks={tasks}
-                  team={team}
-                  onImport={(payload: any) => handleImport(payload)}
-                />
+                {isAdmin && (
+                  <ExportImportControls
+                    projects={projects}
+                    tasks={tasks}
+                    team={team}
+                    onImport={(payload: any) => handleImport(payload)}
+                  />
+                )}
 
                 <button
                   onClick={() => setDark(!dark)}
@@ -1963,53 +2289,94 @@ export default function ProjectManagement({
             <TaskView
               currentMemberId={authTeamMemberId}
               columns={columns}
-              onDropTo={(status, draggedId) => {
-                const idToUse = draggedId ?? dragTaskId;
-                if (!idToUse) {
-                  console.warn("drop ignored — no dragged id");
-                  return;
-                }
+              onDropTo={(
+                status?: string,
+                draggedId?: string,
+                insertIndex?: number
+              ) => {
+                if (!draggedId) return;
 
-                // lakukan update lokal + API menggunakan idToUse
-                setTasks((s) =>
-                  s.map((t) =>
-                    nid(t.id) === nid(idToUse) ? { ...t, status } : t
-                  )
-                );
+                // optimistic reorder on client (flat tasks array, each task has .status)
+                setTasks((s) => {
+                  const clone = [...s];
+                  const fromIdx = clone.findIndex(
+                    (t) => nid(t.id) === nid(draggedId)
+                  );
+                  if (fromIdx === -1) return s;
 
+                  const [moved] = clone.splice(fromIdx, 1);
+
+                  // collect current tasks in the destination column (in DOM/state order)
+                  const dest = clone.filter((t) => t.status === status);
+
+                  // compute insertion index among dest; default append
+                  const idx =
+                    typeof insertIndex === "number" && insertIndex >= 0
+                      ? insertIndex
+                      : dest.length;
+
+                  // build new list: insert moved task (with updated status) at proper position among dest
+                  const result: typeof s = [];
+                  let inserted = false;
+                  let seenInDest = 0;
+                  for (const t of clone) {
+                    if (t.status === status) {
+                      if (seenInDest === idx && !inserted) {
+                        result.push({ ...moved, status });
+                        inserted = true;
+                      }
+                      result.push(t);
+                      seenInDest++;
+                    } else {
+                      result.push(t);
+                    }
+                  }
+                  if (!inserted) {
+                    // column empty or insert at end
+                    result.push({ ...moved, status });
+                  }
+                  return result;
+                });
+
+                // call server to persist status (and optionally order/position if backend supports it)
                 updateTaskMutation.mutate(
-                  { id: idToUse, patch: { status } },
                   {
-                    onError: () => {
+                    id: draggedId,
+                    patch: {
+                      status /* optionally include order/index if supported */,
+                    },
+                  },
+                  {
+                    onError: (err) => {
+                      console.error("update task failed", err);
+                      // fallback: enqueue op for eventual sync
                       try {
                         enqueueOp({
                           op: "update_task",
-                          payload: { id: idToUse, patch: { status } },
+                          payload: { id: draggedId, patch: { status } },
                           createdAt: new Date().toISOString(),
                         });
-                      } catch (_) {
-                        console.log("update task failed");
+                      } catch (e) {
+                        console.log("enqueue failed", e);
                       }
                     },
-                    onSettled: () =>
+                    onSettled: () => {
                       qcRef.current.invalidateQueries([
                         "tasks",
                         activeProjectId,
-                      ]),
+                      ]);
+                    },
                   }
                 );
-
-                // reset drag state
-                setDragTaskId(null);
               }}
               onDragStart={handleDragStart}
               onDrag={handleDrag}
               onDragEnd={handleDragEnd}
               dragPos={dragPos}
               dragTaskId={dragTaskId}
+              startPointerDrag={startPointerDrag}
               onSelectTask={(t) => setSelectedTask(t)}
               team={team}
-              startPointerDrag={startPointerDrag}
             />
 
             {selectedTask && (
@@ -2103,6 +2470,14 @@ export default function ProjectManagement({
         onClose={() => setShowEditProfile(false)}
         member={editMember}
         onSave={handleSaveProfile}
+        dark={dark}
+      />
+
+      <EditMemberModal
+        open={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        member={editMember}
+        onSave={handleSaveMember}
         dark={dark}
       />
     </QueryClientProvider>
