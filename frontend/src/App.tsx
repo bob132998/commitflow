@@ -55,6 +55,7 @@ function App() {
     setAuth({
       token: r.token,
       userId: r.userId,
+      user: r.user,
       teamMemberId: r.teamMemberId ?? null,
     });
 

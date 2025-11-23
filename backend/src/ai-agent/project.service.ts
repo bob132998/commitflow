@@ -9,12 +9,23 @@ const prisma = new PrismaClient();
  * PROJECTS
  * =====================================
  */
-export async function getProjects() {
+export async function getProjects(userId: string) {
   try {
     console.log("getProjects");
+    const team = await prisma.teamMember.findMany({
+      where: {
+        userId,
+      },
+    });
+    const workspaceIds = team.map((item: any) => item.workspaceId);
 
     const results = await prisma.project.findMany({
-      where: { isTrash: false },
+      where: {
+        isTrash: false,
+        workspaceId: {
+          in: workspaceIds,
+        },
+      },
       include: {
         tasks: {
           where: { isTrash: false },
@@ -79,9 +90,37 @@ function baseTaskInclude() {
   };
 }
 
-function buildTaskWhere(projectId?: string, status?: string) {
+async function buildTaskWhere(
+  userId: string,
+  projectId?: string,
+  status?: string
+) {
+  const team = await prisma.teamMember.findMany({
+    where: {
+      userId,
+    },
+  });
+  const workspaceIds = team.map((item: any) => item.workspaceId);
+  const whereProject: any = {
+    workspaceId: {
+      in: workspaceIds,
+    },
+  };
+  if (projectId) {
+    whereProject.id = projectId;
+  }
+
+  const projects = await prisma.project.findMany({
+    where: whereProject,
+  });
+
+  const projectIds = projects.map((item: any) => item.id);
+
   const where: any = { isTrash: false };
-  if (projectId) where.projectId = projectId;
+  if (projectId)
+    where.projectId = {
+      in: projectIds,
+    };
   if (status) where.status = status;
   return where;
 }
@@ -91,12 +130,12 @@ function buildTaskWhere(projectId?: string, status?: string) {
  * ALL TASKS
  * =====================================
  */
-export async function getAllTasks(projectId = "") {
+export async function getAllTasks(projectId = "", userId: string) {
   try {
     console.log("getAllTasks");
 
     const results = await prisma.task.findMany({
-      where: buildTaskWhere(projectId),
+      where: await buildTaskWhere(userId, projectId),
       include: baseTaskInclude(),
       orderBy: { createdAt: "desc" },
     });
@@ -113,12 +152,12 @@ export async function getAllTasks(projectId = "") {
  * TODO TASKS
  * =====================================
  */
-export async function getTodoTasks(projectId = "") {
+export async function getTodoTasks(projectId = "", userId: string) {
   try {
     console.log("getTodoTasks");
 
     const results = await prisma.task.findMany({
-      where: buildTaskWhere(projectId, "todo"),
+      where: await buildTaskWhere(userId, projectId, "todo"),
       include: baseTaskInclude(),
       orderBy: { createdAt: "desc" },
     });
@@ -135,12 +174,12 @@ export async function getTodoTasks(projectId = "") {
  * IN PROGRESS TASKS
  * =====================================
  */
-export async function getInProgressTasks(projectId = "") {
+export async function getInProgressTasks(projectId = "", userId: string) {
   try {
     console.log("getInProgressTasks");
 
     const results = await prisma.task.findMany({
-      where: buildTaskWhere(projectId, "inprogress"),
+      where: await buildTaskWhere(userId, projectId, "inprogress"),
       include: baseTaskInclude(),
       orderBy: { createdAt: "desc" },
     });
@@ -157,12 +196,12 @@ export async function getInProgressTasks(projectId = "") {
  * DONE TASKS
  * =====================================
  */
-export async function getDoneTasks(projectId = "") {
+export async function getDoneTasks(projectId = "", userId: string) {
   try {
     console.log("getDoneTasks");
 
     const results = await prisma.task.findMany({
-      where: buildTaskWhere(projectId, "done"),
+      where: await buildTaskWhere(userId, projectId, "done"),
       include: baseTaskInclude(),
       orderBy: { createdAt: "desc" },
     });
@@ -179,7 +218,7 @@ export async function getDoneTasks(projectId = "") {
  * MEMBERS
  * =====================================
  */
-export async function getMembers() {
+export async function getMembers(userId: string) {
   try {
     console.log("getMembers");
 
@@ -229,7 +268,10 @@ export async function getMembers() {
   }
 }
 
-export async function getUnassignedTasks(projectId: string = "") {
+export async function getUnassignedTasks(
+  projectId: string = "",
+  userId: string
+) {
   try {
     console.log("getUnassignedTasks");
 
@@ -253,7 +295,7 @@ export async function getUnassignedTasks(projectId: string = "") {
   }
 }
 
-export async function getUrgentTasks(projectId: string = "") {
+export async function getUrgentTasks(projectId: string = "", userId: string) {
   try {
     console.log("getUrgentTasks");
 
@@ -277,7 +319,7 @@ export async function getUrgentTasks(projectId: string = "") {
   }
 }
 
-export async function getLowTasks(projectId: string = "") {
+export async function getLowTasks(projectId: string = "", userId: string) {
   try {
     console.log("getLowTasks");
 
@@ -301,7 +343,7 @@ export async function getLowTasks(projectId: string = "") {
   }
 }
 
-export async function getMediumTasks(projectId: string = "") {
+export async function getMediumTasks(projectId: string = "", userId: string) {
   try {
     console.log("getMediumTasks");
 

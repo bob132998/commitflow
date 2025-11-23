@@ -15,6 +15,7 @@ import { JwtGuard } from "./common/guards/jwt.guard";
 import { SharedModule } from "./common/shared.module";
 import { UploadModule } from './upload/upload.module';
 import { ProjectManagementModule } from './project-management/project-management.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ProjectManagementModule } from './project-management/project-management
     SharedModule,
     UploadModule,
     ProjectManagementModule,
+    EmailModule,
   ],
   controllers: [AppController, AskController],
   providers: [AppService, AskService, AskGateway, JwtGuard],

@@ -10,15 +10,25 @@ export default function TaskView({
   columns,
   onDropTo,
   onDragStart,
+  onDrag,
+  onDragEnd,
+  dragPos,
+  dragTaskId,
   onSelectTask,
   team,
+  startPointerDrag,
 }: {
   currentMemberId: any;
   columns: { key: Task["status"]; title: string; items: Task[] }[];
-  onDropTo: (s: Task["status"]) => void;
-  onDragStart: (id: string) => void;
+  onDropTo: (s: Task["status"], draggedId?: string) => void;
+  onDragStart: (e: React.DragEvent, id: string) => void;
+  onDrag: (e: React.DragEvent) => void;
+  onDragEnd: (e: React.DragEvent) => void;
+  dragPos: { x: number; y: number; width: number };
+  dragTaskId: string | null;
   onSelectTask: (t: Task) => void;
   team: TeamMember[];
+  startPointerDrag: (id: string, x: number, y: number, target: any) => void;
 }) {
   const STORAGE_KEY = "taskview_mode_v1";
   const [view, setView] = useState<"kanban" | "list" | "timeline">(() => {
@@ -54,7 +64,7 @@ export default function TaskView({
               onClick={() => setView("kanban")}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition ${
                 view === "kanban"
-                  ? "bg-white dark:bg-gray-900 shadow-sm text-slate-900 dark:text-slate-100"
+                  ? "bg-slate-100 dark:bg-gray-900 shadow-sm text-slate-900 dark:text-slate-100"
                   : "text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
@@ -66,7 +76,7 @@ export default function TaskView({
               onClick={() => setView("list")}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition ${
                 view === "list"
-                  ? "bg-white dark:bg-gray-900 shadow-sm text-slate-900 dark:text-slate-100"
+                  ? "bg-slate-100 dark:bg-gray-900 shadow-sm text-slate-900 dark:text-slate-100"
                   : "text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
@@ -78,7 +88,7 @@ export default function TaskView({
               onClick={() => setView("timeline")}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition ${
                 view === "timeline"
-                  ? "bg-white dark:bg-gray-900 shadow-sm text-slate-900 dark:text-slate-100"
+                  ? "bg-slate-100 dark:bg-gray-900 shadow-sm text-slate-900 dark:text-slate-100"
                   : "text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
@@ -94,10 +104,15 @@ export default function TaskView({
         <KanbanBoard
           currentMemberId={currentMemberId}
           columns={columns}
+          dragTaskId={dragTaskId}
           onDropTo={onDropTo}
-          onDragStart={onDragStart}
+          onDragStart={onDragStart} // sekarang expects (e,id)
+          onDrag={onDrag} // new prop
+          onDragEnd={onDragEnd} // new prop
           onSelectTask={onSelectTask}
           team={team}
+          dragPos={dragPos}
+          startPointerDrag={startPointerDrag}
         />
       )}
 
