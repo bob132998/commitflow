@@ -93,6 +93,7 @@ export class AuthService {
             email,
             role: role ?? null,
             photo: photo ?? null,
+            isAdmin: true,
             // optionally store clientTempId if you want mapping
             // clientTempId: clientTempId ?? null  // uncomment if you added field
             createdAt: new Date(),

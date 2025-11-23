@@ -49,6 +49,7 @@ export type TeamMember = {
   createdAt?: string;
   updatedAt?: string;
   isTrash?: boolean;
+  isAdmin?: boolean;
   clientId?: string;
   workspaceId?: string;
   userId?: string;

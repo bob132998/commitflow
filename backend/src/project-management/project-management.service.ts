@@ -717,13 +717,23 @@ export class ProjectManagementService {
       email?: string;
       photo?: string;
       phone?: string;
+      isAdmin?: boolean;
       password?: string;
       clientId?: string | null;
       workspaceId: string;
     }>
   ) {
-    const { clientId, email, name, role, photo, phone, password, workspaceId } =
-      payload as any;
+    const {
+      clientId,
+      email,
+      name,
+      role,
+      photo,
+      phone,
+      isAdmin,
+      password,
+      workspaceId,
+    } = payload as any;
 
     // 1) If clientId provided — try to find existing TeamMember by clientId first.
     if (clientId) {
@@ -770,6 +780,7 @@ export class ProjectManagementService {
             photo: user.photo ? user.photo : photo ?? null,
             phone: phone ?? null,
             clientId: clientId ?? null,
+            isAdmin: isAdmin ?? false,
             userId: user.id,
             workspaceId,
             createdAt: new Date(),
@@ -800,9 +811,11 @@ export class ProjectManagementService {
       role?: string;
       phone?: string;
       password?: string;
+      isAdmin?: boolean;
       photo?: string;
     }>
   ) {
+    console.log(payload);
     // 1) ensure team member exists
     const exists = await prisma.teamMember.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException("Team member not found");
@@ -813,6 +826,8 @@ export class ProjectManagementService {
     if (typeof payload.role !== "undefined") tmData.role = payload.role;
     if (typeof payload.phone !== "undefined") tmData.phone = payload.phone;
     if (typeof payload.photo !== "undefined") tmData.photo = payload.photo;
+    if (typeof payload.isAdmin !== "undefined")
+      tmData.isAdmin = payload.isAdmin;
     tmData.updatedAt = new Date();
 
     // prepare user update/create data

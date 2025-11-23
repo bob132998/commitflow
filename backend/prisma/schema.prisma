@@ -73,6 +73,7 @@ model TeamMember {
   photo       String?
   phone       String?
   isTrash     Boolean  @default(false)
+  isAdmin     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime?
   Task        Task[]

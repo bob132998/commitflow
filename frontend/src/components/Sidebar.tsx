@@ -90,6 +90,8 @@ export default function Sidebar({
   removeProject,
   onWorkspaceCreated,
   isPlaySound,
+  openEditProfileTeam,
+  isAdmin,
 }: {
   workspaces: Workspace[];
   activeWorkspaceId: string;
@@ -104,6 +106,8 @@ export default function Sidebar({
   removeProject: (id: string) => void;
   onWorkspaceCreated?: (w: Workspace) => void;
   isPlaySound: boolean;
+  openEditProfileTeam: (member: any) => void;
+  isAdmin: boolean;
 }) {
   const [isDark, setIsDark] = useState<boolean>(() => {
     try {
@@ -446,13 +450,15 @@ export default function Sidebar({
                 !collapsed ? "" : "justify-center w-full"
               }`}
             >
-              <button
-                onClick={() => setOpenCreateProject(true)}
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-                title="Create project"
-              >
-                <PlusCircle size={16} />
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setOpenCreateProject(true)}
+                  className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                  title="Create project"
+                >
+                  <PlusCircle size={16} />
+                </button>
+              )}
             </div>
           </div>
           {/* projects list */}
@@ -534,7 +540,7 @@ export default function Sidebar({
                       {initial}
                     </button>
                   )}
-                  {!collapsed && (
+                  {!collapsed && isAdmin && (
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                       <button
                         onClick={() => handleRemoveProject(p.id, p.name)}
@@ -568,13 +574,15 @@ export default function Sidebar({
                 !collapsed ? "" : "justify-center w-full"
               }`}
             >
-              <button
-                onClick={() => setShowCreateTeam(true)}
-                className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-                title="Add team member"
-              >
-                <UserPlus size={16} />
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowCreateTeam(true)}
+                  className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                  title="Add team member"
+                >
+                  <UserPlus size={16} />
+                </button>
+              )}
             </div>
           </div>
           {/* team list */}
@@ -717,6 +725,11 @@ export default function Sidebar({
           removeTeamMember(id);
           setDetailMember(null);
         }}
+        openEditProfileTeam={(member: any) => {
+          setDetailMember(null);
+          openEditProfileTeam(member);
+        }}
+        isAdmin={isAdmin}
       />
     </motion.aside>
   );
