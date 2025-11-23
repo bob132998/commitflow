@@ -22,12 +22,14 @@ function makeError(res: Response, parsed: any) {
 export type AuthResult = {
   token: string;
   userId: string;
+  user: any | null;
   teamMemberId?: string | null;
   clientTempId?: string | null;
 };
 
 export async function apiRegister(payload: {
   clientTempId?: string;
+  workspace: string;
   email: string;
   name: string;
   password?: string;
@@ -55,5 +57,6 @@ export async function apiLogin(payload: {
   });
   const parsed = await parseJson(res);
   if (!res.ok) throw makeError(res, parsed);
+  console.log(parsed);
   return parsed;
 }

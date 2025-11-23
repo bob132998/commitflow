@@ -43,12 +43,14 @@ type AuthState = {
   token: string | null;
   userId: string | null;
   teamMemberId?: string | null;
+  user?: any | null;
   // actions
   initSession: () => Promise<string | null>;
   setAuth: (payload: {
     token: string;
     userId: string;
     teamMemberId?: string | null;
+    user?: any | null;
   }) => void;
   register: (payload: {
     email: string;
@@ -66,7 +68,7 @@ const useAuthStore = create<AuthState>()(
       token: null,
       userId: null,
       teamMemberId: null,
-
+      user: null,
       // Initialize session from persisted state / localStorage
       async initSession() {
         // If already in-memory, return it
@@ -80,11 +82,16 @@ const useAuthStore = create<AuthState>()(
           localStorage.getItem("token");
         const userIdFromLS = localStorage.getItem("userId");
 
+        const userFromLS = localStorage.getItem("userId")
+          ? JSON.stringify(localStorage.getItem("userId"))
+          : null;
+
         if (tokenFromLS) {
           // set store from localStorage values we found
           set({
             token: tokenFromLS,
             userId: userIdFromLS ?? null,
+            user: userFromLS ?? null,
             // teamMemberId might be stored by our login/register response in persisted store,
             // but if you saved it to localStorage elsewhere, you can load it here too.
           });
@@ -96,7 +103,7 @@ const useAuthStore = create<AuthState>()(
       },
 
       setAuth(payload) {
-        const { token, userId, teamMemberId } = payload;
+        const { token, userId, teamMemberId, user } = payload;
         try {
           if (token) localStorage.setItem("session_token", token);
         } catch {
@@ -104,24 +111,27 @@ const useAuthStore = create<AuthState>()(
         }
         try {
           if (userId) localStorage.setItem("userId", userId);
+          if (user) localStorage.setItem("user", JSON.stringify(user));
         } catch {
           console.log("error session_token");
         }
-        set({ token, userId, teamMemberId: teamMemberId ?? null });
+        set({ token, userId, user, teamMemberId: teamMemberId ?? null });
       },
 
-      async register(payload) {
+      async register(payload: any) {
         // calls apiRegister and updates store
-        const result = await apiRegister(payload);
+        const result: AuthResult = await apiRegister(payload);
         // result: { token, userId, teamMemberId?, clientTempId? }
         set({
           token: result.token,
           userId: result.userId,
+          user: result.user,
           teamMemberId: result.teamMemberId ?? null,
         });
         try {
           localStorage.setItem("session_token", result.token);
           localStorage.setItem("userId", result.userId);
+          localStorage.setItem("user", JSON.stringify(result.user));
           if (result.teamMemberId)
             localStorage.setItem("teamMemberId", result.teamMemberId);
         } catch {
@@ -131,16 +141,18 @@ const useAuthStore = create<AuthState>()(
       },
 
       async login(payload) {
-        const result = await apiLogin(payload);
+        const result: AuthResult = await apiLogin(payload);
         console.log(result);
         set({
           token: result.token,
           userId: result.userId,
+          user: result.user,
           teamMemberId: result.teamMemberId ?? null,
         });
         try {
           localStorage.setItem("session_token", result.token);
           localStorage.setItem("userId", result.userId);
+          localStorage.setItem("user", JSON.stringify(result.user));
           if (result.teamMemberId)
             localStorage.setItem("teamMemberId", result.teamMemberId);
         } catch {

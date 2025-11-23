@@ -1,3 +1,4 @@
+// frontend/src/components/ExportImportControls.tsx
 import React, { useRef } from "react";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
@@ -5,105 +6,140 @@ import { Download, UploadCloud } from "lucide-react";
 import type { Project, Task, TeamMember } from "../types";
 
 /**
- * ExportImportControls
- * - Exports projects, tasks (including comments & attachments), and team to XLSX
- * - Imports XLSX and maps sheets back to projects/tasks/team. Tasks.comments is parsed from JSON.
+ * ExportImportControls (per-project)
  *
- * Usage:
- * <ExportImportControls projects={projects} tasks={tasks} team={team} onImport={handleImport} />
+ * Props:
+ * - projects: Project[] (used only to resolve project -> workspaceId if selectedProjectId provided)
+ * - tasks: Task[]
+ * - team: TeamMember[]
+ * - selectedProjectId?: string  // when provided, export only tasks for this project (and related members)
+ * - onImport: (payload: { tasks?: Task[]; team?: TeamMember[] }) => void
+ *
+ * Exports sheets:
+ *  - tasks  (comments embedded as JSON string)
+ *  - team   (filtered to members related to exported tasks / workspace)
+ *
+ * Imports: reads tasks and team, parses comments into arrays, then calls onImport.
  */
 
 export default function ExportImportControls({
   projects,
   tasks,
   team,
+  selectedProjectId,
   onImport,
 }: {
-  projects: Project[];
+  projects?: Project[];
   tasks: Task[];
   team: TeamMember[];
-  onImport: (payload: {
-    projects?: Project[];
-    tasks?: Task[];
-    team?: string[];
-  }) => void;
+  selectedProjectId?: string;
+  onImport: (payload: { tasks?: Task[]; team?: TeamMember[] }) => void;
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
+  const safeString = (v: any) =>
+    v === null || typeof v === "undefined" ? "" : String(v);
+  const tryParseJSON = (s: string) => {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return null;
+    }
+  };
+
   function exportXlsx() {
     try {
-      // Prepare data
-      const pj = projects.map((p) => ({
-        id: p.id,
-        name: p.name,
-        description: (p as any).description ?? "",
-        createdAt: (p as any).createdAt ?? "",
-        updatedAt: (p as any).updatedAt ?? "",
+      // Determine tasks to export (per-project if selected)
+      const filteredTasks = selectedProjectId
+        ? tasks.filter((t) => t.projectId === selectedProjectId)
+        : tasks.slice();
+
+      // Build set of assigneeIds referenced by those tasks
+      const assigneeIds = new Set<string>();
+      for (const t of filteredTasks) {
+        if ((t as any).assigneeId)
+          assigneeIds.add(String((t as any).assigneeId));
+      }
+
+      // Try to find project's workspaceId for broader team inclusion (optional)
+      const project = projects?.find((p) => p.id === selectedProjectId);
+      const projectWorkspaceId = project?.workspaceId;
+
+      // Team rows: include members referenced by tasks OR members belonging to same workspace (if known)
+      const tmRows = team
+        .filter((m) => {
+          if (assigneeIds.size > 0 && assigneeIds.has(m.id)) return true;
+          if (projectWorkspaceId && m.workspaceId === projectWorkspaceId)
+            return true;
+          // if no project selected, include all
+          return !selectedProjectId;
+        })
+        .map((m) => ({
+          id: m.id,
+          clientId: (m as any).clientId ?? "",
+          userId: m.userId ?? "",
+          workspaceId: m.workspaceId ?? "",
+          name: m.name,
+          role: m.role ?? "",
+          email: m.email ?? "",
+          photo: m.photo ?? "",
+          phone: m.phone ?? "",
+          isTrash:
+            typeof m.isTrash !== "undefined" ? Boolean(m.isTrash) : false,
+          createdAt: (m as any).createdAt ? String((m as any).createdAt) : "",
+          updatedAt: (m as any).updatedAt ? String((m as any).updatedAt) : "",
+        }));
+
+      // Tasks rows: include comments serialized
+      const tkRows = filteredTasks.map((t) => ({
+        id: t.id,
+        clientId: (t as any).clientId ?? "",
+        projectId: (t as any).projectId ?? "",
+        title: t.title,
+        description: t.description ?? "",
+        status: t.status ?? "todo",
+        assigneeId: t.assigneeId ?? "",
+        priority: t.priority ?? "",
+        startDate: t.startDate ?? "",
+        dueDate: t.dueDate ?? "",
+        isTrash:
+          typeof (t as any).isTrash !== "undefined"
+            ? Boolean((t as any).isTrash)
+            : false,
+        comments: JSON.stringify((t as any).comments ?? []),
+        createdAt: (t as any).createdAt ? String((t as any).createdAt) : "",
+        updatedAt: (t as any).updatedAt ? String((t as any).updatedAt) : "",
       }));
-
-      // prepare team sheet rows (full objects)
-      const tmRows = team.map((m) => ({
-        id: m.id,
-        name: m.name,
-        role: m.role ?? "",
-        email: m.email ?? "",
-        photo: m.photo ?? "",
-      }));
-
-      // build quick map from team id -> name for assigneeName resolution
-      const teamById = new Map<string, TeamMember>();
-      for (const m of team) teamById.set(m.id, m);
-
-      const tk = tasks.map((t) => {
-        // resolve assigneeName: prefer explicit field, otherwise lookup by id
-        const assigneeName =
-          (t as any).assigneeName ??
-          (t.assigneeId ? teamById.get(t.assigneeId)?.name : undefined) ??
-          "";
-        return {
-          id: t.id,
-          title: t.title,
-          description: t.description ?? "",
-          status: t.status ?? "todo",
-          projectId: t.projectId ?? "",
-          assigneeId: t.assigneeId ?? "",
-          assigneeName,
-          priority: (t as any).priority ?? "",
-          startDate: t.startDate ?? "",
-          dueDate: t.dueDate ?? "",
-          // comments stored as JSON string so they survive roundtrip
-          comments: JSON.stringify(t.comments || []),
-          createdAt: (t as any).createdAt ?? "",
-          updatedAt: (t as any).updatedAt ?? "",
-        };
-      });
 
       const wb = XLSX.utils.book_new();
-      // Use consistent sheet names lowercase for compatibility with existing import code
       XLSX.utils.book_append_sheet(
         wb,
-        XLSX.utils.json_to_sheet(pj),
-        "projects"
+        XLSX.utils.json_to_sheet(tkRows),
+        "tasks"
       );
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tk), "tasks");
       XLSX.utils.book_append_sheet(
         wb,
         XLSX.utils.json_to_sheet(tmRows),
         "team"
       );
 
-      const filename = `commitflow_export_${new Date()
+      const projectTag = selectedProjectId ? `_${selectedProjectId}` : "";
+      const filename = `commitflow_export${projectTag}_${new Date()
         .toISOString()
         .slice(0, 10)}.xlsx`;
-
-      // write & download
       XLSX.writeFile(wb, filename);
 
-      toast.dark("Exported project data to Excel (includes comments)");
+      toast.dark(
+        `Exported ${tkRows.length} task(s) and ${tmRows.length} member(s) to Excel`
+      );
     } catch (err) {
       console.error("Export failed", err);
       toast.dark("Export failed");
     }
+  }
+
+  function findSheetName(wb: XLSX.WorkBook, name: string) {
+    return wb.SheetNames.find((n) => n.toLowerCase() === name.toLowerCase());
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -114,110 +150,108 @@ export default function ExportImportControls({
     reader.onload = (ev) => {
       try {
         const data = ev.target?.result;
-        // prefer 'binary' for compatibility
         const wb = XLSX.read(data as any, { type: "binary" });
         const out: any = {};
 
-        // --- projects ---
-        if (wb.SheetNames.some((n) => n.toLowerCase() === "projects")) {
-          const name = wb.SheetNames.find(
-            (n) => n.toLowerCase() === "projects"
-          )!;
-          const pjRaw = XLSX.utils.sheet_to_json(wb.Sheets[name], {
+        // tasks (with comments parsing)
+        const tkName = findSheetName(wb, "tasks");
+        if (tkName) {
+          const raw = XLSX.utils.sheet_to_json(wb.Sheets[tkName], {
             defval: "",
           });
-          out.projects = pjRaw
-            .map((r: any) => ({
-              id: String(r.id ?? r.ID ?? r.Id ?? "").trim(),
-              name: String(r.name ?? r.Name ?? "").trim(),
-              description: String(r.description ?? r.Description ?? ""),
-              createdAt: String(r.createdAt ?? r.CreatedAt ?? ""),
-              updatedAt: String(r.updatedAt ?? r.UpdatedAt ?? ""),
-            }))
-            .filter((p: any) => p.id && p.name);
-        }
-
-        // --- tasks (with comments parsing) ---
-        if (wb.SheetNames.some((n) => n.toLowerCase() === "tasks")) {
-          const name = wb.SheetNames.find((n) => n.toLowerCase() === "tasks")!;
-          const tkRaw = XLSX.utils.sheet_to_json(wb.Sheets[name], {
-            defval: "",
-          });
-          out.tasks = tkRaw
+          out.tasks = raw
             .map((r: any) => {
-              // parse comments column if present and valid JSON
-              let comments = [] as any[];
-              const commentsRaw = (
-                r.comments ??
-                r.Comments ??
-                r.COMMENT ??
-                ""
-              ).toString();
+              const commentsRaw = safeString(
+                r.comments ?? r.Comments ?? r.COMMENT ?? ""
+              );
+              let commentsArr: any[] = [];
               if (commentsRaw) {
-                try {
-                  const parsed = JSON.parse(commentsRaw);
-                  if (Array.isArray(parsed)) comments = parsed;
-                } catch {
-                  comments = [];
-                }
+                const parsed = tryParseJSON(commentsRaw);
+                if (Array.isArray(parsed)) commentsArr = parsed;
+                else commentsArr = [];
               }
-
               return {
-                id: String(r.id ?? r.ID ?? r.Id ?? "").trim(),
-                title: String(r.title ?? r.Title ?? "").trim(),
-                description: r.description ?? r.Description ?? "",
-                status: r.status ?? r.Status ?? "todo",
-                projectId: String(
-                  r.projectId ?? r.projectID ?? r.project ?? ""
-                ).trim(),
-                assigneeId:
-                  (r.assigneeId ?? r.AssigneeId ?? r.assignee ?? "")
-                    .toString()
-                    .trim() || undefined,
-                assigneeName:
-                  (r.assigneeName ?? r.AssigneeName ?? r.assignee_name ?? "")
-                    .toString()
-                    .trim() || undefined,
-                priority:
-                  (r.priority ?? r.Priority ?? "").toString().trim() ||
+                id: safeString(r.id ?? r.ID ?? r.Id ?? "").trim(),
+                clientId:
+                  safeString(r.clientId ?? r.clientid ?? "").trim() ||
                   undefined,
-                startDate: (r.startDate ?? r.StartDate ?? "").toString() || "",
-                dueDate: (r.dueDate ?? r.DueDate ?? "").toString() || "",
-                comments,
+                projectId:
+                  safeString(
+                    r.projectId ?? r.projectid ?? r.project ?? ""
+                  ).trim() || undefined,
+                title: safeString(r.title ?? r.Title ?? "").trim(),
+                description:
+                  safeString(r.description ?? r.Description ?? "").trim() ||
+                  undefined,
+                status:
+                  safeString(r.status ?? r.Status ?? "todo").trim() || "todo",
+                assigneeId:
+                  safeString(
+                    r.assigneeId ?? r.assigneeid ?? r.assignee ?? ""
+                  ).trim() || undefined,
+                priority:
+                  safeString(r.priority ?? r.Priority ?? "").trim() ||
+                  undefined,
+                startDate:
+                  safeString(r.startDate ?? r.StartDate ?? "").trim() ||
+                  undefined,
+                dueDate:
+                  safeString(r.dueDate ?? r.DueDate ?? "").trim() || undefined,
+                isTrash:
+                  String(r.isTrash ?? r.IsTrash ?? r.istrash ?? "")
+                    .toLowerCase()
+                    .trim() === "true",
+                comments: commentsArr,
                 createdAt:
-                  String(
-                    r.createdAt ?? r.CreatedAt ?? r.createdAt ?? ""
-                  ).trim() || undefined,
+                  safeString(r.createdAt ?? r.CreatedAt ?? "").trim() ||
+                  undefined,
                 updatedAt:
-                  String(
-                    r.updatedAt ?? r.UpdatedAt ?? r.updatedAt ?? ""
-                  ).trim() || undefined,
-              };
+                  safeString(r.updatedAt ?? r.UpdatedAt ?? "").trim() ||
+                  undefined,
+              } as Task;
             })
             .filter((t: any) => t.id && t.title);
         }
 
-        // --- team ---
-        if (wb.SheetNames.some((n) => n.toLowerCase() === "team")) {
-          const name = wb.SheetNames.find((n) => n.toLowerCase() === "team")!;
-          const tmRaw = XLSX.utils.sheet_to_json(wb.Sheets[name], {
+        // team
+        const tmName = findSheetName(wb, "team");
+        if (tmName) {
+          const raw = XLSX.utils.sheet_to_json(wb.Sheets[tmName], {
             defval: "",
           });
-          // out.team for onImport expects string[] of names (existing code expects name list)
-          out.team = tmRaw
-            .map((r: any) => {
-              // prefer name column; if id present we still return name (for create/update team upstream)
-              const nm = r.name ?? r.Name ?? r.username ?? r.Username ?? "";
-              return String(nm).trim();
-            })
-            .filter((n: string) => !!n);
+          out.team = raw
+            .map((r: any) => ({
+              id: safeString(r.id ?? r.ID ?? r.Id ?? "").trim(),
+              clientId:
+                safeString(r.clientId ?? r.clientid ?? "").trim() || undefined,
+              userId:
+                safeString(r.userId ?? r.userid ?? r.user ?? "").trim() ||
+                undefined,
+              workspaceId:
+                safeString(
+                  r.workspaceId ?? r.workspaceid ?? r.workspace ?? ""
+                ).trim() || undefined,
+              name: safeString(r.name ?? r.Name ?? r.username ?? "").trim(),
+              role: safeString(r.role ?? r.Role ?? "").trim() || undefined,
+              email: safeString(r.email ?? r.Email ?? "").trim() || undefined,
+              photo: safeString(r.photo ?? r.Photo ?? "").trim() || undefined,
+              phone: safeString(r.phone ?? r.Phone ?? "").trim() || undefined,
+              isTrash:
+                String(r.isTrash ?? r.IsTrash ?? r.istrash ?? "")
+                  .toLowerCase()
+                  .trim() === "true",
+              createdAt:
+                safeString(r.createdAt ?? r.CreatedAt ?? "").trim() ||
+                undefined,
+              updatedAt:
+                safeString(r.updatedAt ?? r.UpdatedAt ?? "").trim() ||
+                undefined,
+            }))
+            .filter((m: any) => m.name);
         }
 
         onImport(out);
-        toast.dark(
-          "Imported Excel file successfully (comments included if present)"
-        );
-      } catch (err: any) {
+      } catch (err) {
         console.error("Import failed", err);
         toast.dark("Failed to import Excel file");
       } finally {
@@ -225,37 +259,44 @@ export default function ExportImportControls({
       }
     };
 
-    // read file as binary string (SheetJS compatible)
     reader.readAsBinaryString(f);
   }
 
   return (
     <div className="flex items-center gap-3">
-      {/* Export button: gradient, prominent */}
+      {/* Export button */}
       <button
         onClick={exportXlsx}
-        title="Export to Excel"
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
-                   bg-gradient-to-r from-sky-500 to-sky-600 text-white shadow-md
-                   hover:from-sky-600 hover:to-sky-700 active:scale-95 transition-transform
-                   dark:from-sky-600 dark:to-sky-700"
+        title="Export project to Excel"
         aria-label="Export to Excel"
+        className={`group inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+              bg-gradient-to-r from-sky-500 to-sky-600 text-white
+              hover:from-sky-600 hover:to-sky-700
+              active:scale-95 transition-all duration-300
+              dark:from-sky-600 dark:to-sky-700 dark:hover:from-sky-700 dark:hover:to-sky-800`}
       >
-        <Download className="w-4 h-4" />
-        <span>Export</span>
+        <Download
+          size={16}
+          className="transition-transform duration-300 group-hover:-rotate-6"
+          aria-hidden="true"
+        />
+        <span>{selectedProjectId ? "Export project" : "Export all"}</span>
       </button>
 
-      {/* Import button: lighter, supports dark */}
       <label
         htmlFor="cf-import-xlsx"
         title="Import from Excel"
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
-                   bg-white border border-gray-200 text-gray-700 cursor-pointer
-                   hover:bg-gray-50 active:scale-95 transition-colors
-                   dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+        className="group inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+             bg-white border border-gray-200 text-gray-700 cursor-pointer
+             hover:bg-gray-50 active:scale-95 transition-all duration-300
+             dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
       >
-        <UploadCloud className="w-4 h-4" />
+        <UploadCloud
+          className="w-4 h-4 transition-transform duration-300 
+               group-hover:-rotate-6 group-hover:translate-y-0.5"
+        />
         <span>Import</span>
+
         <input
           id="cf-import-xlsx"
           ref={fileRef}

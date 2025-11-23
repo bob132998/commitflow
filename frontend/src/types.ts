@@ -13,6 +13,9 @@ export type Comment = {
   body: string;
   createdAt: string;
   attachments?: Attachment[];
+  clientId?: string;
+  updatedAt?: string;
+  isTrash?: boolean;
 };
 
 export type Task = {
@@ -29,6 +32,9 @@ export type Task = {
   // optional: cached assignee name if you like
   assigneeName?: string | null;
   clientId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  isTrash?: boolean;
   // ...
 };
 
@@ -40,11 +46,32 @@ export type TeamMember = {
   phone?: string;
   photo?: string;
   password?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  isTrash?: boolean;
+  clientId?: string;
+  workspaceId?: string;
+  userId?: string;
+  Task?: any;
+};
+
+export type Workspace = {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  isTrash?: boolean;
+  clientId?: string;
 };
 
 export type Project = {
   id: string;
   name: string;
+  workspaceId: string;
   description?: string;
   createdAt?: string;
+  updatedAt?: string;
+  isTrash?: boolean;
+  clientId?: string;
 };

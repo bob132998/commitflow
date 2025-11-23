@@ -23,6 +23,8 @@ export class AuthController {
     return {
       token: result.token,
       userId: result.user.id,
+      user: result.user,
+      workspaceId: result.workspace.id,
       teamMemberId: result.teamMember.id,
       clientTempId: result.clientTempId ?? null,
     };
@@ -36,7 +38,8 @@ export class AuthController {
     return {
       token: result.token,
       userId: result?.user?.id ?? "",
-      teamMemberId: result.teamMember?.id ?? null,
+      user: result.user,
+      teamMemberId: result?.teamMemberId,
     };
   }
 }
