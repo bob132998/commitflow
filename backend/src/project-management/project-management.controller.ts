@@ -23,7 +23,11 @@ import { ProjectManagementService } from "./project-management.service";
 import { CreateProjectDto, UpdateProjectDto } from "./dto/project.dto";
 import { CreateTaskDto, UpdateTaskDto, PatchTaskDto } from "./dto/task.dto";
 import { CreateCommentDto, UpdateCommentDto } from "./dto/comment.dto";
-import { CreateTeamMemberDto, UpdateTeamMemberDto } from "./dto/team.dto";
+import {
+  CreateTeamMemberDto,
+  InviteTeamMemberDto,
+  UpdateTeamMemberDto,
+} from "./dto/team.dto";
 import { Request } from "express";
 import * as fs from "fs";
 import { join } from "path";
@@ -189,6 +193,17 @@ export class ProjectManagementController {
   @Delete("team/:id")
   deleteTeamMember(@Param("id") id: string) {
     return this.svc.deleteTeamMember(id);
+  }
+
+  @Post("team/invite")
+  inviteTeamMember(@Body() dto: InviteTeamMemberDto, @Req() req: any) {
+    const userId = req.user.userId;
+    return this.svc.inviteTeamMember(dto, userId);
+  }
+
+  @Get("team/invite/:id")
+  acceptInvite(@Param("id") id: string) {
+    return this.svc.acceptInvite(id);
   }
 
   // Simple uploads route (used by frontend if needed)

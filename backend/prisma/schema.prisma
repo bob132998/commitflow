@@ -139,6 +139,16 @@ model Comment {
   updatedAt   DateTime?
 }
 
+model Invite {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  email         String
+  invitedBy     String
+  isInvited     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime?
+}
+
 enum Role {
   USER
   ADMIN

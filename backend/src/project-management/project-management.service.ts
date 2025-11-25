@@ -16,6 +16,8 @@ import logger from "vico-logger";
 
 const prisma = new PrismaClient();
 
+const FE_URL = process.env?.FE_URL ?? "";
+
 @Injectable()
 export class ProjectManagementService {
   constructor(private email: EmailService) {}
@@ -201,35 +203,53 @@ export class ProjectManagementService {
     `;
 
     const htmlMsg = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="margin-bottom: 8px;">🚀 New Project Created</h2>
-        <p>A new project has been added to your workspace on <strong>CommitFlow</strong>.</p>
+    <div style="font-family: Arial, sans-serif; background:#f4f5f7; padding:24px;">
+      <div style="max-width:600px; margin:0 auto; background:#ffffff; border-radius:10px; padding:32px; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
 
-        <div style="padding: 12px 16px; background: #f8f9fa; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 0; font-size: 15px;">
-            <strong>Project Name:</strong><br>
+        <h2 style="color:#2d3748; margin:0 0 8px; font-size:22px;">
+          🚀 New Project Created
+        </h2>
+
+        <p style="color:#4a5568; margin:0 0 20px; font-size:15px;">
+          A new project has been created in your <strong>CommitFlow</strong> workspace.
+        </p>
+
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:20px; margin-bottom:24px;">
+          <p style="margin:0 0 14px; font-size:15px; color:#1a202c;">
+            <strong style="color:#2b6cb0;">Project Name:</strong><br>
             ${projectName}
           </p>
 
-          <p style="margin-top: 12px; font-size: 15px;">
-            <strong>Description:</strong><br>
+          <p style="margin:0; font-size:15px; color:#1a202c;">
+            <strong style="color:#2b6cb0;">Description:</strong><br>
             ${projectDesc}
           </p>
         </div>
 
-        <p>You are receiving this because you are a member of this workspace.</p>
+        <p style="font-size:14px; color:#4a5568; margin-bottom:32px;">
+          You are receiving this email because you are a member of this workspace.
+        </p>
 
-        <p style="margin-top: 24px; font-size: 14px; color: #666;">
+        <div style="text-align:center; margin-bottom:10px;">
+          <a href="${FE_URL}"
+            style="background:#2b6cb0; color:#fff; padding:10px 18px; border-radius:6px; text-decoration:none; font-size:14px;">
+            Open CommitFlow
+          </a>
+        </div>
+
+        <p style="font-size:13px; color:#a0aec0; text-align:center; margin-top:20px;">
           — CommitFlow Team
         </p>
+
       </div>
-    `;
+    </div>
+  `;
 
     for (const recipient of toEmails) {
       try {
         await this.email.sendMail({
-          to: recipient ?? "getechindonesia@gmail.com",
-          subject: "New Project Created | CommitFlow",
+          to: recipient ?? "",
+          subject: "🚀 New Project Created | CommitFlow",
           text: textMsg,
           html: htmlMsg,
         });
@@ -548,8 +568,10 @@ export class ProjectManagementService {
     }
 
     if (assigneeId !== data.assigneeId) {
-      emailTitle = `👤 Task Assignee has Changed`;
-      emailDescription = `👤 A task Assignee has been changed on <strong>${projectName}</strong>.`;
+      emailTitle = `👤 Task Assignee has Changed to ${assignee.name ?? "none"}`;
+      emailDescription = `👤 A task Assignee has been changed to ${
+        assignee.name ?? "none"
+      } on <strong>${projectName}</strong>.`;
     }
 
     const textMsg = `
@@ -575,50 +597,80 @@ export class ProjectManagementService {
     `;
 
     const htmlMsg = `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-      <h2 style="margin-bottom: 8px;">${emailTitle}</h2>
-      <p>${emailDescription}</p>
+      <div style="font-family: Arial, sans-serif; background:#f4f5f7; padding:24px;">
+        <div style="max-width:600px; margin:0 auto; background:#ffffff; border-radius:10px; padding:32px; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
 
-      <div style="padding: 14px 18px; background: #f8f9fa; border-radius: 10px; margin: 20px 0;">
-        <p style="margin: 0; font-size: 15px;">
-          <strong>Task Title:</strong><br>
-          ${updated.title}
-        </p>
+          <h2 style="color:#2d3748; margin:0 0 8px; font-size:22px;">
+            ${emailTitle}
+          </h2>
 
-        <p style="margin-top: 12px; font-size: 15px;">
-          <strong>Description:</strong><br>
-          ${updated.description ?? "No description"}
-        </p>
+          <p style="color:#4a5568; margin:0 0 20px; font-size:15px;">
+            ${emailDescription}
+          </p>
 
-        <p style="margin-top: 12px; font-size: 15px;">
-          <strong>Status:</strong> ${updated.status}<br>
-          <strong>Assignee:</strong> ${assignee.name ?? "none"}<br>
-          <strong>Priority:</strong> ${updated.priority ?? "none"}
-        </p>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:20px; margin-bottom:24px;">
 
-        <p style="margin-top: 12px; font-size: 15px;">
-          <strong>Start Date:</strong> ${format(updated.startDate)}<br>
-          <strong>Due Date:</strong> ${format(updated.dueDate)}
-        </p>
+            <p style="margin:0 0 14px; font-size:15px; color:#1a202c;">
+              <strong style="color:#2b6cb0;">Task Title:</strong><br>
+              ${updated.title}
+            </p>
 
-        <p style="margin-top: 12px; font-size: 15px;">
-          <strong>Project:</strong><br>
-          ${projectName}
-        </p>
+            <p style="margin:0 0 14px; font-size:15px;">
+              <strong style="color:#2b6cb0;">Description:</strong><br>
+              ${updated.description ?? "No description"}
+            </p>
+
+            <p style="margin:0 0 14px; font-size:15px;">
+              <strong style="color:#2b6cb0;">Status:</strong> ${
+                updated.status
+              }<br>
+              <strong style="color:#2b6cb0;">Assignee:</strong> ${
+                assignee.name ?? "none"
+              }<br>
+              <strong style="color:#2b6cb0;">Priority:</strong> ${
+                updated.priority ?? "none"
+              }
+            </p>
+
+            <p style="margin:0 0 14px; font-size:15px;">
+              <strong style="color:#2b6cb0;">Start Date:</strong> ${format(
+                updated.startDate
+              )}<br>
+              <strong style="color:#2b6cb0;">Due Date:</strong> ${format(
+                updated.dueDate
+              )}
+            </p>
+
+            <p style="margin:0; font-size:15px;">
+              <strong style="color:#2b6cb0;">Project:</strong><br>
+              ${projectName}
+            </p>
+          </div>
+
+          <div style="text-align:center; margin-bottom:28px;">
+            <a href="${FE_URL}"
+              style="background:#2b6cb0; color:#fff; padding:12px 20px; border-radius:6px; text-decoration:none; font-size:14px; display:inline-block;">
+              Open Task
+            </a>
+          </div>
+
+          <p style="font-size:14px; color:#4a5568;">
+            You received this because you are a member of the workspace team.
+          </p>
+
+          <p style="font-size:13px; color:#a0aec0; text-align:center; margin-top:22px;">
+            — CommitFlow Team
+          </p>
+
+        </div>
       </div>
-
-      <p>You received this because you are a member of the workspace team.</p>
-
-      <p style="margin-top: 24px; font-size: 14px; color: #666;">
-        — CommitFlow Team
-      </p>
-    </div>
     `;
+
     console.log(textMsg);
     // KIRIM EMAIL
     for (const recipient of toEmails) {
       await this.email.sendMail({
-        to: recipient ?? "getechindonesia@gmail.com",
+        to: recipient ?? "",
         subject: `${emailTitle} | CommitFlow`,
         text: textMsg,
         html: htmlMsg,
@@ -748,43 +800,74 @@ export class ProjectManagementService {
     `;
 
     const htmlMsg = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="margin-bottom: 8px;">💬 New Comment!</h2>
+      <div style="font-family: Arial, sans-serif; background:#f4f5f7; padding:24px;">
+        <div style="max-width:640px; margin:0 auto; background:#ffffff; border-radius:10px; padding:28px; box-shadow:0 6px 20px rgba(13,38,59,0.06);">
 
-        <div style="padding: 12px 16px; background: #f8f9fa; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 0; font-size: 15px;">
-            <strong>Project Name:</strong><br>
-            ${projectName}
+          <!-- Header -->
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+            <!-- optional small logo area -->
+            <div style="width:44px; height:44px; border-radius:8px; background:#eef2ff; display:flex; align-items:center; justify-content:center; font-size:20px;">
+              💬
+            </div>
+            <div>
+              <h2 style="color:#2d3748; font-size:18px; margin:0;">💬 New Comment!</h2>
+              <p style="margin:4px 0 0; color:#4a5568; font-size:13px;">Ada komentar baru di task yang kamu ikuti.</p>
+            </div>
+          </div>
+
+          <!-- Card -->
+          <div style="background:#f8fafc; border:1px solid #e6eef9; border-radius:10px; padding:18px; margin:18px 0;">
+            <p style="margin:0 0 10px; font-size:14px; color:#1a202c;">
+              <strong style="color:#2b6cb0;">Project</strong><br>
+              ${projectName ?? "—"}
+            </p>
+
+            <p style="margin:0 0 10px; font-size:14px; color:#1a202c;">
+              <strong style="color:#2b6cb0;">Task</strong><br>
+              ${taskName ?? "—"}
+            </p>
+
+            <p style="margin:0 0 10px; font-size:14px; color:#1a202c;">
+              <strong style="color:#2b6cb0;">Author</strong><br>
+              ${author ?? "Unknown"}
+            </p>
+
+            <div style="margin-top:6px; padding:12px; background:#ffffff; border-radius:8px; border:1px solid #edf2f7;">
+              <p style="margin:0; font-size:14px; color:#2d3748; line-height:1.5; white-space:pre-wrap;">
+                <strong style="display:block; color:#2b6cb0; margin-bottom:8px;">Comment</strong>
+                ${
+                  body && body.length > 100
+                    ? body.slice(0, 300) + "…"
+                    : body ?? "No comment content"
+                }
+              </p>
+            </div>
+          </div>
+
+          <!-- CTA -->
+          <div style="text-align:center; margin:18px 0;">
+            <a href="${FE_URL}"
+              style="display:inline-block; background:#2b6cb0; color:#fff; padding:12px 18px; border-radius:8px; text-decoration:none; font-size:14px;">
+              Open Comment in CommitFlow
+            </a>
+          </div>
+
+          <p style="font-size:13px; color:#4a5568; text-align:center; margin-top:8px;">
+            You are receiving this because you are a member of this workspace.
           </p>
 
-          <p style="margin-top: 12px; font-size: 15px;">
-            <strong>Task Name:</strong><br>
-            ${taskName}
+          <p style="font-size:13px; color:#a0aec0; text-align:center; margin-top:18px;">
+            — CommitFlow Team
           </p>
 
-          <p style="margin-top: 12px; font-size: 15px;">
-            <strong>Author:</strong><br>
-            ${author}
-          </p>
-
-          <p style="margin-top: 12px; font-size: 15px;">
-            <strong>Comment:</strong><br>
-            ${body}
-          </p>
         </div>
-
-        <p>You are receiving this because you are a member of this workspace.</p>
-
-        <p style="margin-top: 24px; font-size: 14px; color: #666;">
-          — CommitFlow Team
-        </p>
       </div>
     `;
 
     for (const recipient of toEmails) {
       try {
         await this.email.sendMail({
-          to: recipient ?? "getechindonesia@gmail.com",
+          to: recipient ?? "",
           subject: "💬 New Comment | CommitFlow",
           text: textMsg,
           html: htmlMsg,
@@ -1040,6 +1123,198 @@ export class ProjectManagementService {
       }),
     ]);
     return { success: true, deleted: true };
+  }
+
+  async inviteTeamMember(
+    payload: { email: string; workspaceId: string },
+    userId: string
+  ) {
+    if (!payload.email) throw new NotFoundException("Email invalid");
+    if (!payload.workspaceId) throw new NotFoundException("Workspace invalid");
+    if (!userId) throw new NotFoundException("User invalid");
+
+    const checkMember = await prisma.teamMember.findFirst({
+      where: {
+        email: payload.email,
+        workspaceId: payload.workspaceId,
+      },
+    });
+    if (checkMember) {
+      return {
+        success: false,
+        reason: "exists",
+        message: "Member already exists!",
+      };
+    }
+
+    const invite = await prisma.invite.create({
+      data: {
+        workspaceId: payload.workspaceId,
+        email: payload.email,
+        invitedBy: userId,
+      },
+    });
+
+    const workspace = await prisma.workspace.findUnique({
+      where: {
+        id: payload.workspaceId,
+      },
+    });
+
+    if (!workspace) throw new NotFoundException("Workspace not found");
+    const workspaceName = workspace.name;
+
+    const expires = new Date(invite.createdAt);
+    expires.setDate(expires.getDate() + 1);
+
+    const expiryTime = expires.toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Jakarta",
+    });
+
+    const textMsg = `
+      👋 You’ve been invited to join a workspace on CommitFlow!
+
+          Workspace:
+          - ${workspaceName}
+    
+          Click the link below to accept the invitation:
+          ${FE_URL}/invite/${invite.id}
+
+          Link Expiry: ${expiryTime}
+
+          This link is unique for you. If you didn’t expect this invitation, you can safely ignore this email.
+
+          —
+          CommitFlow Team
+    `;
+
+    const htmlMsg = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.7; color: #333; max-width: 520px; margin: auto;">
+        <h2 style="margin-bottom: 10px;">👋 You've been invited to join CommitFlow</h2>
+
+        <p style="font-size: 15px;">
+          You have been invited to join the following workspace:
+        </p>
+
+        <div style="padding: 16px 20px; background: #f8f9fa; border: 1px solid #e5e5e5; border-radius: 8px; margin: 18px 0;">
+          <p style="margin: 0; font-size: 15px;">
+            <strong>Workspace:</strong><br>
+            ${workspaceName}
+          </p>
+
+          <p style="margin: 12px 0 0; font-size: 15px;">
+            <strong>Link Expiry:</strong><br>
+            ${expiryTime} <!-- contoh: "26 Nov 2025, 14:30 WIB" -->
+          </p>
+        </div>
+
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${FE_URL}/invite/${invite.id}"
+            style="
+              background-color: #4a6cf7;
+              color: #ffffff;
+              text-decoration: none;
+              padding: 12px 22px;
+              font-size: 15px;
+              font-weight: bold;
+              border-radius: 6px;
+              display: inline-block;
+            ">
+            Accept Invitation
+          </a>
+        </div>
+
+        <p style="font-size: 14px;">
+          This link is unique to you and will expire in <strong>24 hours</strong>.  
+          If you did not expect this invitation, you may safely ignore this email.
+        </p>
+
+        <p style="margin-top: 26px; font-size: 14px; color: #666;">
+          — CommitFlow Team
+        </p>
+      </div>
+    `;
+
+    try {
+      await this.email.sendMail({
+        to: payload.email,
+        subject: `👋 You've been invited to join workspace ${workspaceName} | CommitFlow`,
+        text: textMsg,
+        html: htmlMsg,
+      });
+    } catch (error) {
+      logger.error(error);
+    }
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    return {
+      success: true,
+      message: "Invite success.",
+      id: invite.id,
+    };
+  }
+
+  async acceptInvite(id: string) {
+    const exists = await prisma.invite.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException("Invitation link not found");
+    if (exists.isInvited) {
+      return {
+        success: false,
+        reason: "invited",
+        message: "User already exists in team",
+      };
+    }
+    // Expiration: 1 day (24 hours)
+    const now = new Date();
+    const createdAt = new Date(exists.createdAt);
+    const diffMs = now.getTime() - createdAt.getTime();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+
+    if (diffMs > oneDayMs) {
+      return {
+        success: false,
+        reason: "expired",
+        message: "Invitation link has expired",
+      };
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: exists.email },
+    });
+
+    // If the email hasn’t registered yet, allow frontend to continue registration
+    if (!user) {
+      return { success: true, user: null, id };
+    }
+
+    // If user exists, add them to the team
+    const createTeam = await prisma.teamMember.create({
+      data: {
+        workspaceId: exists.workspaceId,
+        userId: user.id,
+        name: user.name ?? "",
+        email: user.email,
+        phone: user.phone,
+        photo: user.photo,
+      },
+    });
+
+    const updateInvite = await prisma.invite.update({
+      where: {
+        id,
+      },
+      data: {
+        isInvited: true,
+      },
+    });
+
+    return { success: true, user };
   }
 
   // Export XLSX

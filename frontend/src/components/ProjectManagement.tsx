@@ -32,6 +32,7 @@ import EditProfileModal from "./EditProfileModal";
 import { playSound } from "../utils/playSound";
 import { getState, saveState } from "../utils/local";
 import EditMemberModal from "./EditMemberModal";
+import InviteLinkModal from "./InviteLinkModal";
 
 // Create local QueryClient so this component works even if app not wrapped globally
 const queryClient = new QueryClient();
@@ -59,11 +60,13 @@ export default function ProjectManagement({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showEditMember, setShowEditMember] = useState(false);
+  const [showInviteLink, setShowInviteLink] = useState(false);
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
   const teamMemberId = useAuthStore((s) => s.teamMemberId);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [inviteLink, setInviteLink] = useState<string>("");
   const [activeProjectId, setActiveProjectId] = useState<string>(
     initialProjectId ? initialProjectId : projects[0]?.id ?? ""
   );
@@ -1501,37 +1504,39 @@ export default function ProjectManagement({
     }
   }
 
-  async function addTeamMember(newMember: TeamMember) {
+  useEffect(() => {
+    if (inviteLink) {
+      setShowInviteLink(true);
+    } else {
+      setShowInviteLink(false);
+    }
+  }, [inviteLink]);
+
+  async function addTeamMember(newMember: any) {
     const m = {
       ...newMember,
-      id: newMember.id || `tmp_${Math.random().toString(36).slice(2, 9)}`,
       workspaceId: activeWorkspaceId,
     };
 
-    // optimistic add so UI updates immediately
-    setTeam((s) => [...s, m]);
-
     try {
-      const created = await api.createTeamMember({ ...m, clientId: m.id });
-      console.log("createTeamMember returned:", created);
-
-      // Merge created response with optimistic item so we don't lose fields
-      const merged = { ...m, ...created };
-      setTeam((prev) => prev.map((t) => (t.id === m.id ? merged : t)));
-
-      // ensure canonical server state: re-fetch team for current workspace
-      try {
-        const serverTeam = await api.getTeam(activeWorkspaceId);
-        setTeam(normalizeTeamInput(serverTeam || []));
-      } catch (err) {
-        // if fetch fails, at least keep optimistic merged state
-        console.warn("Failed to refresh team after create", err);
+      const created = await api.inviteTeamMember({ ...m, clientId: m.id });
+      console.log("inviteTeamMember returned:", created);
+      if (!created.success) {
+        Swal.fire({
+          title: "Member Exists",
+          text: `Member already exists!`,
+          icon: "error",
+          showConfirmButton: true,
+          background: "#111827",
+          color: "#e5e7eb",
+        });
       }
+      setInviteLink(created.id);
     } catch (err) {
       console.error("createTeamMember failed, enqueueing", err);
       try {
         enqueueOp({
-          op: "create_team",
+          op: "invite_team",
           payload: { ...m, clientId: m.id },
           createdAt: new Date().toISOString(),
         });
@@ -2484,6 +2489,13 @@ export default function ProjectManagement({
         onClose={() => setShowEditMember(false)}
         member={editMember}
         onSave={handleSaveMember}
+        dark={dark}
+      />
+
+      <InviteLinkModal
+        open={showInviteLink}
+        onClose={() => setShowInviteLink(false)}
+        id={inviteLink}
         dark={dark}
       />
     </QueryClientProvider>
