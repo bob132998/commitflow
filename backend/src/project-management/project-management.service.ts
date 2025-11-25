@@ -696,6 +696,99 @@ export class ProjectManagementService {
         attachments: payload.attachments ?? undefined,
       },
     });
+
+    //send email to team members
+    const p = await prisma.project.findFirst({
+      where: { id: task.projectId ?? "", isTrash: false },
+    });
+
+    if (!p) throw new NotFoundException("Project not found");
+
+    //send email to team members
+    const teams = await prisma.teamMember.findMany({
+      where: { workspaceId: p.workspaceId ?? "", isTrash: false },
+      select: { email: true },
+    });
+
+    const toEmails = teams.map((t) => t.email?.trim()).filter(Boolean);
+
+    if (toEmails.length === 0) throw new Error("No recipient emails found");
+
+    const projectName = p.name;
+    const taskName = task.title;
+    const author = payload.author;
+    const body = payload.body;
+
+    const textMsg = `
+      💬 New Comment!
+
+      Project Name:
+      ${projectName}
+
+      Task Name:
+      ${taskName}
+
+      Author:
+      ${author}
+
+      Comment:
+      ${body}
+
+      You are receiving this notification because you are part of the workspace team.
+
+      Regards,
+      CommitFlow Team
+    `;
+
+    const htmlMsg = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="margin-bottom: 8px;">💬 New Comment!</h2>
+
+        <div style="padding: 12px 16px; background: #f8f9fa; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 15px;">
+            <strong>Project Name:</strong><br>
+            ${projectName}
+          </p>
+
+          <p style="margin-top: 12px; font-size: 15px;">
+            <strong>Task Name:</strong><br>
+            ${taskName}
+          </p>
+
+          <p style="margin-top: 12px; font-size: 15px;">
+            <strong>Author:</strong><br>
+            ${author}
+          </p>
+
+          <p style="margin-top: 12px; font-size: 15px;">
+            <strong>Comment:</strong><br>
+            ${body}
+          </p>
+        </div>
+
+        <p>You are receiving this because you are a member of this workspace.</p>
+
+        <p style="margin-top: 24px; font-size: 14px; color: #666;">
+          — CommitFlow Team
+        </p>
+      </div>
+    `;
+
+    for (const recipient of toEmails) {
+      try {
+        await this.email.sendMail({
+          to: recipient ?? "getechindonesia@gmail.com",
+          subject: "💬 New Comment | CommitFlow",
+          text: textMsg,
+          html: htmlMsg,
+        });
+      } catch (error) {
+        logger.error(error);
+      }
+
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
     return {
       ...c,
       createdAt: c.createdAt?.toISOString(),
