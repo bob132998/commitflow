@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.6
+
+### Patch Changes
+
+- 64dd380: fix: invite team member
+
 ## 1.3.4
 
 ### Patch Changes
