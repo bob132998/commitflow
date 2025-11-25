@@ -57,3 +57,11 @@ export class UpdateTeamMemberDto {
   @IsString()
   photo?: string;
 }
+
+export class InviteTeamMemberDto {
+  @IsString()
+  email: string;
+
+  @IsString()
+  workspaceId: string;
+}

@@ -11,6 +11,8 @@ import AuthCard from "./components/Auth/AuthCard";
 import { useAuthStore } from "./utils/store";
 import { playSound } from "./utils/playSound";
 import { getState, saveState } from "./utils/local";
+import { getInviteTokenFromUrl, saveInviteToken } from "./utils/invite";
+import { useProcessInvite } from "./hooks/useProcessInvite";
 
 function App() {
   const [isShow, setIsShow] = useState(false);
@@ -18,6 +20,7 @@ function App() {
   const setAuth = useAuthStore((s) => s.setAuth); // ambil setter dari store
   const initSession = useAuthStore((s) => s.initSession);
   const token = useAuthStore((s) => s.token);
+  const { processInviteIfAny } = useProcessInvite();
 
   // untuk kontrol animasi splash logo
   const [showLogo, setShowLogo] = useState(true);
@@ -30,12 +33,36 @@ function App() {
   });
 
   useEffect(() => {
+    const token = getInviteTokenFromUrl();
+    if (token) {
+      saveInviteToken(token);
+      // optionally remove query param from URL to clean address bar
+      const url = new URL(window.location.href);
+      url.searchParams.delete("inviteToken");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  useEffect(() => {
     saveState(KEY, isPlaySound);
   }, [isPlaySound]);
 
   useEffect(() => {
-    initSession();
-  }, [isLogin]);
+    (async () => {
+      const t = await initSession(); // restores token from persisted store
+      if (t) {
+        // user is logged in — process invite
+        await processInviteIfAny();
+      }
+    })();
+  }, [isLogin, initSession, processInviteIfAny]);
+
+  useEffect(() => {
+    if (token) {
+      // when token becomes available (login or register), process invite
+      void processInviteIfAny();
+    }
+  }, [token, processInviteIfAny]);
 
   useEffect(() => {
     new Audio("/sounds/send.mp3").load();

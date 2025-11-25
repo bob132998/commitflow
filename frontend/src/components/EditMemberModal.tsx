@@ -292,6 +292,7 @@ export default function EditMemberModal({
                     </div>
                     <input
                       value={email ?? ""}
+                      readOnly
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Email"
                       className="px-3 py-2 rounded-lg border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-300 dark:focus:ring-sky-600"

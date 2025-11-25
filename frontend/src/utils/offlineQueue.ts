@@ -12,7 +12,8 @@ export type OpType = {
     | "create_team"
     | "update_team"
     | "delete_team"
-    | "create_comment";
+    | "create_comment"
+    | "invite_team";
   payload: any;
   createdAt: string;
   id?: string;

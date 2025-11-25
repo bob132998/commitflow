@@ -247,6 +247,26 @@ export async function deleteTeamMember(id: string) {
   return parsed;
 }
 
+export async function inviteTeamMember(payload: any) {
+  const res = await apiFetch(`${BASE}/api/team/invite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const parsed = await parseJson(res);
+  if (!res.ok) throw makeError(res, parsed);
+  return parsed;
+}
+
+export async function acceptInviteTeamMember(token: any) {
+  const res = await apiFetch(`${BASE}/api/team/invite/${token}`, {
+    method: "GET",
+  });
+  const parsed = await parseJson(res);
+  if (!res.ok) throw makeError(res, parsed);
+  return parsed;
+}
+
 /**
  * Export / Import helpers (server-side export or upload import)
  */
